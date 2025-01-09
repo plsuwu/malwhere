@@ -161,8 +161,7 @@ impl Hell {
         // for the parameters but i'd prefer to entirely rework this with macros anyway
         asm!(
              
-            "sub rsp, 0x50",    // make `[(11 total - 4 register) = 7 parameters * 0x08 bytes]` of 
-                                // space on the stack
+            "sub rsp, 0x50",  
 
             "mov qword ptr ss:[rsp+0x20], {4}",
             "mov qword ptr ss:[rsp+0x28], {5}",
