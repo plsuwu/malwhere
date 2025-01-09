@@ -19,7 +19,7 @@ unsafe extern "system" fn descend() {
             // we don't want the compiler pushing values to the stack arbitrarily or the arguments we 
             // set up previously won't be correct, we're essentially telling the compiler here that we're
             // not using the stack so it doesn't need to save register values onto the stack 
-            // (or like that something)
+            // (or something like that)
             options(nostack),
     );
 }
