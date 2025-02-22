@@ -19,7 +19,7 @@ unsafe extern "system" fn descend() {
             // we don't want the compiler pushing values to the stack arbitrarily or the arguments we 
             // set up previously won't be correct, we're essentially telling the compiler here that we're
             // not using the stack so it doesn't need to save register values onto the stack 
-            // (or like that something)
+            // (or something like that)
             options(nostack),
     );
 }
@@ -161,8 +161,7 @@ impl Hell {
         // for the parameters but i'd prefer to entirely rework this with macros anyway
         asm!(
              
-            "sub rsp, 0x50",    // make `[(11 total - 4 register) = 7 parameters * 0x08 bytes]` of 
-                                // space on the stack
+            "sub rsp, 0x50",  
 
             "mov qword ptr ss:[rsp+0x20], {4}",
             "mov qword ptr ss:[rsp+0x28], {5}",
