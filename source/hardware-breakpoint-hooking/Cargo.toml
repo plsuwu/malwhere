@@ -1,5 +1,5 @@
 [package]
-name = "hardware-breakpoint-hook"
+name = "hardware-breakpoint-hooking"
 version = "0.1.0"
 edition = "2021"
 
