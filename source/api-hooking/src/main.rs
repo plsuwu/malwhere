@@ -34,7 +34,11 @@ const X64_TRAMPOLINE: [u8; 13] = [
 
 // `Hook` struct to track function addresses and the original memory contents so we can
 // unhook ourselves when required
-#[derive(Debug)]
+
+// !!??
+// #[repr(C, align(16))]        // 16-byte struct alignment might fix the issues 
+                                // associated with building as in release mode?  
+#[derive(Debug)] 
 struct Hook {
     p_target: *const u64,
     p_replace: *const u64,
