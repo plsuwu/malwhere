@@ -1,8 +1,10 @@
 # malwhere
 
-assorted malware techniques.
+assorted malware techniques and related computer menaces.   
 
-> no payloads are malicious
+> payloads aren't actually malicious, they're like all msfvenom `cmd.exe /c calc.exe` shellcode or at worst the registry stager writes the msfvenom `calc.exe` shellcode to a registry key and leaves it there.
+> 
+> also defender instantly shreds most of these the second you compile them on account of the aforementioned msfvenom shellcode.
 
 |directory |language |technique |
 |---  |--- |--- |
