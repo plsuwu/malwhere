@@ -1,3 +1,5 @@
+//! Remote thread enumeration tooling
+
 use super::process::Processes;
 use crate::remote::types::SYSTEM_THREAD_INFORMATION;
 use windows::Win32::Foundation::*;
