@@ -22,11 +22,9 @@ impl Thread {
     /// `SYSTEM_THREAD_INFORMATION.ClientId.UniqueThread` are `HANDLE` types, these are actually
     /// referencing the respective `PID`/`TID` as opposed to a true `HANDLE` type.
     pub fn get_threads(target: &str) -> anyhow::Result<Self> {
-        // retrieve a reference to the `SYSTEM_PROCESS_INFORMATION` vector
         let process_vec = Processes::get();
-
-        // enumerate through the vector to retrieve
         for process in process_vec {
+            // avoid trying to read `ImageName.Buffer` if the process name is null
             if process.ImageName.Length != 0x00 {
                 let name = unsafe { process.ImageName.Buffer.to_string()? };
                 if name.to_lowercase() == target.to_lowercase() {
@@ -41,6 +39,13 @@ impl Thread {
         Err(anyhow::anyhow!("[x] No process '{}'.", target))
     }
 
+    /// Prints some details about a target process's threads to `stdout`:
+    /// * Thread ID
+    /// * Start address
+    /// * Priority
+    /// * State
+    ///
+    /// Function may panic if a thread's `SYSTEM_THREAD_INFORMATION` struct cannot be dereferenced.
     pub fn list_remote_threads(target_process: &str) -> anyhow::Result<()> {
         let process_vec = Processes::get();
 
@@ -60,8 +65,8 @@ impl Thread {
             let mut threads_head_ptr =
                 (&process.Threads) as *const _ as *mut SYSTEM_THREAD_INFORMATION;
             println!(
-                "[+] Got target -> enumerating {} threads:",
-                process.NumberOfThreads
+                "\n[+] Found target '{}' -> enumerating {} threads:",
+                name, process.NumberOfThreads
             );
             println!("----------------------------------------------------");
 
@@ -93,12 +98,14 @@ impl Thread {
                     thread_info.ThreadState
                 );
 
-                println!();
+                if i < thread_count - 1 {
+                    println!();
+                }
             }
 
-            println!("----------------------------------------------------");
+            println!("----------------------------------------------------\n");
         }
-
+        println!();
         Ok(())
     }
 }
