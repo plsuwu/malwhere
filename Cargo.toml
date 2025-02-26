@@ -4,6 +4,7 @@ members = [
     "harness",
     "hwbp-hooks",
     "common",
+    "syscall",
 ]
 
 [profile.release]

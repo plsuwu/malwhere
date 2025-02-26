@@ -5,22 +5,22 @@ use windows::Win32::System::WindowsProgramming::CLIENT_ID;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SYSTEM_THREAD_INFORMATION {
-    /// ```no_run
+    /// ```ignore
     /// // index 0
     /// pub Reserved1: [i64; 3]
     /// ```
     pub KernelTime: i64,
-    /// ```no_run
+    /// ```ignore
     /// // index 1
     /// pub Reserved1: [i64; 3]
     /// ```
     pub UserTime: i64,
-    /// ```no_run
+    /// ```ignore
     /// // index 2
     /// pub Reserved1: [i64; 3]
     /// ```
     pub CreateTime: i64,
-    /// ```no_run
+    /// ```ignore
     /// pub Reserved2: u32
     /// ```
     pub WaitTime: u32,
@@ -28,7 +28,7 @@ pub struct SYSTEM_THREAD_INFORMATION {
     pub ClientId: CLIENT_ID,
     pub Priority: i32,
     pub BasePriority: i32,
-    /// ```no_run
+    /// ```ignore
     /// pub Reserved3: u32
     /// ```
     pub ContextSwitches: u32,
@@ -47,7 +47,7 @@ pub struct SYSTEM_THREAD_INFORMATION {
 /// The `SYSTEM_PROCESS_INFORMATION` struct is a linked list, with the `NextEntryOffset` field
 /// describing the number of bytes to the next node.
 ///
-/// ```no_run
+/// ```ignore
 /// // create a heap-allocated buffer to read in raw struct bytes
 /// let mut bytes: Vec<u8> = Vec::new();
 /// let mut read_byte_count = 0;    // optional; can be `null_mut()`
@@ -83,7 +83,7 @@ pub struct SYSTEM_THREAD_INFORMATION {
 ///
 /// The simplest solution here is to only enumerate threads for specific target processes.
 ///
-/// ```no_run
+/// ```ignore
 /// // dereference the list entry pointer
 /// let node: SYSTEM_PROCESS_INFORMATION = *node_ptr;
 ///
@@ -116,53 +116,53 @@ pub struct SYSTEM_PROCESS_INFORMATION {
     pub NextEntryOffset: u32,
     pub NumberOfThreads: u32,
 
-    /// ```no_run
+    /// ```ignore
     /// // idx 0 -> 7 (8 bytes)
     /// pub Reserved1: [u8; 48]
     /// ```
     pub WorkingSetPrivateSize: i64,
 
-    /// ```no_run
+    /// ```ignore
     /// // idx 8 -> 11 (4 bytes)
     /// pub Reserved1: [u8; 48]
     /// ```
     pub HardFaultCount: u32,
 
-    /// ```no_run
+    /// ```ignore
     /// // idx 12 -> 15 (4 bytes)
     /// pub Reserved1: [u8; 48]
     /// ```
     pub NumberOfThreadsHighWatermark: u32,
 
-    /// ```no_run
+    /// ```ignore
     /// // idx 16 -> 23 (8 bytes)
     /// pub Reserved1: [u8; 48]
     /// ```
     pub CycleTime: u64,
 
-    /// ```no_run
+    /// ```ignore
     /// // idx 24 -> 31 (8 bytes)
     /// pub Reserved1: [u8; 48]
     /// ```
     pub CreateTime: i64,
 
-    /// ```no_run
+    /// ```ignore
     /// // idx 32 -> 39 (8 bytes)
     /// pub Reserved1: [u8; 48]
     /// ```
     pub UserTime: i64,
 
-    /// ```no_run
+    /// ```ignore
     /// // idx 40 -> 47 (8 bytes)
     /// pub Reserved1: [u8; 48]
     /// ```
     pub KernelTime: i64,
 
-    pub ImageName:UNICODE_STRING,
+    pub ImageName: UNICODE_STRING,
     pub BasePriority: i32,
     pub UniqueProcessId: HANDLE,
 
-    /// ```no_run
+    /// ```ignore
     /// // MS type `HANDLE`
     /// pub Reserved2: *mut core::ffi::c_void
     /// ```
@@ -171,7 +171,7 @@ pub struct SYSTEM_PROCESS_INFORMATION {
     pub HandleCount: u32,
     pub SessionId: u32,
 
-    /// ```no_run
+    /// ```ignore
     /// // MS type `ULONG_PTR`
     /// pub Reserved3: *mut core::ffi::c_void
     /// ```
@@ -180,7 +180,7 @@ pub struct SYSTEM_PROCESS_INFORMATION {
     pub PeakVirtualSize: usize,
     pub VirtualSize: usize,
 
-    /// ```no_run
+    /// ```ignore
     /// // MS type `ULONG`
     /// pub Reserved4: u32
     /// ```
@@ -189,7 +189,7 @@ pub struct SYSTEM_PROCESS_INFORMATION {
     pub PeakWorkingSetSize: usize,
     pub WorkingSetSize: usize,
 
-    /// ```no_run
+    /// ```ignore
     /// // MS type `SIZE_T`
     /// pub Reserved5: *mut core::ffi::c_void
     /// ```
@@ -197,7 +197,7 @@ pub struct SYSTEM_PROCESS_INFORMATION {
 
     pub QuotaPagedPoolUsage: usize,
 
-    /// ```no_run
+    /// ```ignore
     /// // MS type `SIZE_T`
     /// pub Reserved6: *mut core::ffi::c_void
     /// ```
@@ -208,37 +208,37 @@ pub struct SYSTEM_PROCESS_INFORMATION {
     pub PeakPagefileUsage: usize,
     pub PrivatePageCount: usize,
 
-    /// ```no_run
+    /// ```ignore
     /// // index 0
     /// pub Reserved7: [i64; 6]
     /// ```
     pub ReadOperationCount: i64,
-    /// ```no_run
+    /// ```ignore
     /// // index 1
     /// pub Reserved7: [i64; 6]
     /// ```
     pub WriteOperationCount: i64,
-    /// ```no_run
+    /// ```ignore
     /// // index 2
     /// pub Reserved7: [i64; 6]
     /// ```
     pub OtherOperationCount: i64,
-    /// ```no_run
+    /// ```ignore
     /// // index 3
     /// pub Reserved7: [i64; 6]
     /// ```
     pub ReadTransferCount: i64,
-    /// ```no_run
+    /// ```ignore
     /// // index 4
     /// pub Reserved7: [i64; 6]
     /// ```
     pub WriteTransferCount: i64,
-    /// ```no_run
+    /// ```ignore
     /// // index 5
     /// pub Reserved7: [i64; 6]
     /// ```
     pub OtherTransferCount: i64,
-    /// ```no_run
+    /// ```ignore
     /// // C/C++ type
     /// SYSTEM_THREAD_INFORMATION Thread[1];
     /// ```
