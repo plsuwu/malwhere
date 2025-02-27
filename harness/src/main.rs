@@ -1,14 +1,20 @@
 //! testing/debugging runner binary
 
-use common::hashing::djb::Djb;
+use common::hashing::crc::Crc32b;
 use common::hashing::traits::StringHasher;
 
 use syscall::initialization::SyscallRegistry;
 
 fn main() -> anyhow::Result<()> {
-    let plains = Vec::from(["a", "b", "c"]);
-    let djb = StringHasher::new(Djb);
-    let mut hashed = djb.hash(plains);
+    let syscalls_plaintext = vec![
+        "NtAllocateVirtualMemory",
+        "NtProtectVirtualMemory",
+        "NtCreateThreadEx",
+        "NtWaitForSingleObject",
+    ];
+
+    let crc_hasher = StringHasher::new(Crc32b);
+    let mut hashed = crc_hasher.hash(syscalls_plaintext);
 
     let table = SyscallRegistry::new(&mut hashed);
 

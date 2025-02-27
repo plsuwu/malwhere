@@ -144,7 +144,7 @@ macro_rules! win_ptr_type {
                 where
                     F: FnOnce(&str) -> R,
                  {
-                    let wrapped = unsafe { <$wrapper>::from_raw(*self) };
+                    let wrapped = <$wrapper>::from_raw(*self);
                     wrapped.with_str(f)
                  }
             }

@@ -4,7 +4,7 @@ use super::traits::HashFunction;
 
 pub struct LoseLose;
 
-impl HashFunction for LoseLose {
+impl HashFunction for LoseLose { 
     type Output = u32;
 
     fn hash_str(&self, s: &str) -> Self::Output {
@@ -22,6 +22,3 @@ impl HashFunction for LoseLose {
         res
     }
 }
-
-
-

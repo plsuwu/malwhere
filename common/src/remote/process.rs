@@ -73,7 +73,7 @@ impl Processes {
 
             // allocate heap space with the size of the linked list
             let mut bytes: Vec<u8> = Vec::with_capacity(alloc_size as usize);
-            bytes.set_len(alloc_size as usize);
+            bytes.fill(0);
 
             // second query to copy list into allocation
             _status = query_system_information(
@@ -89,7 +89,7 @@ impl Processes {
 
             // traverse list and push each node to a vector
             loop {
-                let mut node = *curr_node_ptr;
+                let node = *curr_node_ptr;
                 process_information.push(node);
 
                 if node.NextEntryOffset == 0 {

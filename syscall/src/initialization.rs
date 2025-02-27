@@ -5,13 +5,13 @@ use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 #[derive(Debug)]
 pub struct SyscallRegistry<T> {
-    needs: HashSet<T>,
-    syscalls: Vec<NtSyscall<T>>,
+    targets: HashSet<T>,
+    syscalls: Vec<ResolvedSyscall<T>>,
 }
 
 /// Holds details of a given syscall
 #[derive(Debug)]
-pub struct NtSyscall<T> {
+pub struct ResolvedSyscall<T> {
     /// Syscall number
     ssn: u32,
     /// Hashed syscall name
@@ -23,7 +23,7 @@ pub struct NtSyscall<T> {
 }
 
 impl<T> SyscallRegistry<T> {
-    pub fn new(hashed_calls: &mut Vec<T>) -> Self
+    pub fn new(hashed_calls: &mut [T]) -> Self
     where
         T: Sized + Copy + Hash + Eq,
     {
@@ -33,8 +33,8 @@ impl<T> SyscallRegistry<T> {
         });
 
         Self {
-            needs: hs,
-            syscalls: Vec::<NtSyscall<T>>::new(),
+            targets: hs,
+            syscalls: Vec::<ResolvedSyscall<T>>::new(),
         }
     }
 }
