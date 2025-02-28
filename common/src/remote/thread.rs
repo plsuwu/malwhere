@@ -52,7 +52,7 @@ impl Thread {
         let process_vec = Processes::get();
 
         for process in process_vec {
-            let mut name: String;
+            let name: String;
             if process.ImageName.Length == 0x00 {
                 name = String::from("[[ UNKNOWN_PROCESS_NAME ]]");
             } else {
@@ -64,7 +64,7 @@ impl Thread {
                 continue;
             }
 
-            let mut threads_head_ptr =
+            let threads_head_ptr =
                 (&process.Threads) as *const _ as *mut SYSTEM_THREAD_INFORMATION;
             println!(
                 "\n[+] Found target '{}' -> enumerating {} threads:",

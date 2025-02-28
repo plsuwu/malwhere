@@ -48,8 +48,8 @@ impl Processes {
          * TODO:
          *  replace this with indirect syscall invocation when the module is implemented :)
          * --------------------------------------------------------------------------------- */
-        let libname = PCSTR("NTDLL.DLL\0".as_ptr() as _);
-        let funcname = PCSTR("NtQuerySystemInformation\0".as_ptr() as _);
+        let libname = PCSTR(c"NTDLL.DLL".as_ptr() as _);
+        let funcname = PCSTR(c"NtQuerySystemInformation".as_ptr() as _);
 
         let query_system_information: NtQuerySystemInformation = unsafe {
             let proc = GetProcAddress(GetModuleHandleA(libname)?, funcname).unwrap();

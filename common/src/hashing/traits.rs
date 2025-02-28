@@ -1,6 +1,7 @@
 use windows::core::{PCSTR, PCWSTR};
 
 pub trait HashFunction {
+
     type Output;
 
     fn hash_str(&self, s: &str) -> Self::Output;
@@ -70,6 +71,7 @@ where
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
 pub struct StringHasher<H> {
     hash_func: H,
 }

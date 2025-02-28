@@ -17,7 +17,7 @@ const fn g() -> [u32; 8] {
         0
     ];
 
-    buff[6] = (SEED.wrapping_shr(6) ^ SEED);
+    buff[6] = SEED.wrapping_shr(6) ^ SEED;
     buff[7] = (SEED.wrapping_shr(6) ^ SEED).wrapping_shr(1);
 
     buff

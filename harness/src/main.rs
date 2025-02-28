@@ -2,10 +2,10 @@
 
 use common::hashing::crc::Crc32b;
 use common::hashing::traits::StringHasher;
-
-use syscall::initialization::SyscallRegistry;
+use syscall::resolver::SyscallMap;
 
 fn main() -> anyhow::Result<()> {
+
     let syscalls_plaintext = vec![
         "NtAllocateVirtualMemory",
         "NtProtectVirtualMemory",
@@ -16,7 +16,8 @@ fn main() -> anyhow::Result<()> {
     let crc_hasher = StringHasher::new(Crc32b);
     let mut hashed = crc_hasher.hash(syscalls_plaintext);
 
-    let table = SyscallRegistry::new(&mut hashed);
+    let mut table = SyscallMap::new(&mut hashed, Crc32b);
+    _ = table.resolve()?;
 
     println!("{:#016x?}", table);
 
