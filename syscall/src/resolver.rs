@@ -1,24 +1,19 @@
+use anyhow::Result;
 use common::environment_block::fetcher::Module;
 use common::hashing::traits::{HashFunction, StringHasher};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
-use anyhow::Result;
 
-/// Holds details of a given syscall
+/// Details for an arbitrary syscall
 #[repr(C)]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Syscall {
     /// Syscall number
     pub ssn: u32,
-
     /// Address of syscall
     pub address: *const std::ffi::c_void,
-
     /// Random `syscall` instruction in `NTDLL`
-    ///
-    /// > Can we instead use a single  field in `SyscallMap`
-    /// > (i.e single function address)??
     pub random: *const std::ffi::c_void,
 }
 
@@ -56,12 +51,15 @@ impl<T: Hash + Eq, H: HashFunction<Output = T>> SyscallMap<T, H> {
 
             let export_name_hash = self.hasher.hash(export_name.as_str());
             if let Some(syscall) = self.syscalls.get_mut(&export_name_hash) {
-                let fn_addr = ntdll.exports.get_function(ntdll.module_base, index as isize)?;
-
+                let fn_addr = ntdll
+                    .exports
+                    .get_function(ntdll.module_base, index as isize)?;
                 let fn_ssn = ntdll.exports.get_ssn(fn_addr)?;
-                println!("addr of '{}': {:?}", export_name, fn_addr);
-                println!("\t-> ssn 0x{:x?}", fn_ssn);
 
+                syscall.ssn = fn_ssn;
+                syscall.address = fn_addr;
+
+                // TODO: implement fetching address of a random syscall
 
             }
         }
