@@ -19,9 +19,9 @@ const SYSCALL_OPCODES: [u8; 6] = [
     0x00,
 ];
 
-const HOOKED_OPCODE: u8 = 0xe9;
-const DOWN: i8 = 32;
-const UP: i8 = -32;
+const JMP_OPCODE: u8 = 0xe9;
+const DOWN: isize = 32;
+const UP: isize = -32;
 
 // we probably don't want to hold this in memory for too long, so we might want to
 // impl `Drop` for our `PROCESS_ENVIRONMENT_BLOCK` and `std::mem::zeroed()` its fields when
@@ -156,9 +156,35 @@ impl ModuleExports {
         Ok(fn_address)
     }
 
-    pub fn get_ssn(&self, address: *mut c_void) -> anyhow::Result<u32> {
-        let mut ssn = 0xff;
+    pub fn get_ssn(&self, address: *mut c_void) -> u32 {
+        let hi = unsafe { *((address as u64 + 5) as *const u8) };
+        let lo = unsafe { *((address as u64 + 4) as *const u8) };
 
+        (hi.wrapping_shl(8) | lo) as u32
+    }
+
+    // TODO: implement testing for this with patched hooking
+    pub fn check_neighbor(&self, address: *mut c_void) -> anyhow::Result<u32> {
+        for idx in 1..0xff {
+
+            let neighbor = unsafe { address.byte_offset(idx * DOWN) };
+            if let Some(ssn) = self.match_bytes(neighbor) {
+                return Ok(ssn)
+            }
+        }
+
+        for idx in 1..0xff {
+
+            let neighbor = unsafe { address.byte_offset(idx * UP) };
+            if let Some(ssn) = self.match_bytes(neighbor) {
+                return Ok(ssn)
+            }
+        }
+
+        Err(anyhow::anyhow!("[x] Unable to validate function opcodes in neighboring bytes."))
+    }
+
+    pub fn match_bytes(&self, address: *mut c_void) -> Option<u32> {
         let func_bytes: [u8; 6] = unsafe {[
             *((address as u64) as *const u8),
             *((address as u64 + 1) as *const u8),
@@ -168,17 +194,31 @@ impl ModuleExports {
             *((address as u64 + 7) as *const u8),
         ]};
 
-
-
         if func_bytes == SYSCALL_OPCODES {
-            let hi = unsafe { *((address as u64 + 5) as *const u8) };
-            let lo = unsafe { *((address as u64 + 4) as *const u8) };
-            ssn = hi.wrapping_shl(8) | lo;
+            return Some(self.get_ssn(address))
         }
 
-        if ssn != 0xff {
-            return Ok(ssn as u32)
-        };
+        None
+    }
+
+    pub fn verify_bytes(&self, address: *mut c_void) -> anyhow::Result<u32> {
+        if let Some(ssn) = self.match_bytes(address)  {
+            return Ok(ssn)
+        }
+
+        // not really a reliable implementation until bytepatch hooking is
+        // also implemented for testing purposes :/
+        //
+        // (my brain tells me this implementation is at least slightly
+        // broken lmao)
+        if unsafe { *((address as u64) as *const u8) } == JMP_OPCODE ||
+            unsafe { *((address as u64 + 2) as *const u8)} == JMP_OPCODE
+        {
+            println!("[ ] Function appears to be hooked.");
+            self.check_neighbor(address)?;
+        }
+
+
 
         Err(anyhow::anyhow!("[x] Couldn't validate SSN."))
     }
@@ -214,7 +254,7 @@ impl Module {
         };
         let module_base = unsafe { (*loader_entry).DllBase };
 
-        // confirm our location and carve out exports directory
+        // confirm our location and carve out function export directory
         let nt_headers = Self::get_headers(module_base as _)?;
         let export_addr = Self::get_exports(module_base as _, nt_headers)?;
 
@@ -225,8 +265,9 @@ impl Module {
         })
     }
 
-    /// Resolves the module's `IMAGE_EXPORT_DIRECTORY` using its base address and
-    /// `IMAGE_NT_HEADERS`
+    /// Resolves the address of the module's `IMAGE_EXPORT_DIRECTORY` using the
+    /// `IMAGE_NT_HEADERS.OptionalHeader.DataDirectory[0]` RVA to offset the module's base
+    /// address
     pub fn get_exports(
         module_base: *mut c_void,
         nt_headers: *mut IMAGE_NT_HEADERS64,
@@ -240,10 +281,10 @@ impl Module {
         }
     }
 
-    /// Retrieves NT headers of a PE file
+    /// Retrieves NT headers of a PE file;
     ///
-    /// Also verifies DOS + NT header signatures to confirm expected position in the
-    /// module
+    /// Also verifies DOS + NT header signatures to confirm we are where we expect to
+    /// be in the module
     fn get_headers(module_base: *mut c_void) -> anyhow::Result<*mut IMAGE_NT_HEADERS64> {
         // verify dos header ('MZ')
         let dos_header = module_base as *mut IMAGE_DOS_HEADER;

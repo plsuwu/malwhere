@@ -54,7 +54,7 @@ impl<T: Hash + Eq, H: HashFunction<Output = T>> SyscallMap<T, H> {
                 let fn_addr = ntdll
                     .exports
                     .get_function(ntdll.module_base, index as isize)?;
-                let fn_ssn = ntdll.exports.get_ssn(fn_addr)?;
+                let fn_ssn = ntdll.exports.get_ssn(fn_addr);
 
                 syscall.ssn = fn_ssn;
                 syscall.address = fn_addr;
