@@ -1,5 +1,5 @@
 use anyhow::Result;
-use common::environment_block::fetcher::Module;
+use common::environment_block::module::Module;
 use common::hashing::traits::{HashFunction, StringHasher};
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -17,6 +17,7 @@ pub struct Syscall {
     pub random: *const std::ffi::c_void,
 }
 
+
 #[repr(C)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SyscallMap<T: Hash + Eq, H: HashFunction> {
@@ -31,7 +32,7 @@ impl<T: Hash + Eq, H: HashFunction<Output = T>> SyscallMap<T, H> {
     {
         let mut syscalls = HashMap::new();
         hashed_calls.iter().for_each(|&h| {
-            let syscall_empty: Syscall = unsafe { std::mem::zeroed() };
+            let syscall_empty = unsafe { std::mem::zeroed() };
             syscalls.insert(h, syscall_empty);
         });
 
@@ -44,23 +45,24 @@ impl<T: Hash + Eq, H: HashFunction<Output = T>> SyscallMap<T, H> {
     where
         <H as HashFunction>::Output: Debug,
     {
-        let ntdll = Module::ntdll()?;
+        let mut ntdll = Module::ntdll()?;
 
         for index in 0..ntdll.exports.funcs_count {
-            let export_name = ntdll.exports.read_name(ntdll.module_base, index as isize)?;
-
+            let export_name = ntdll.exports.read_name(index as isize)?;
             let export_name_hash = self.hasher.hash(export_name.as_str());
             if let Some(syscall) = self.syscalls.get_mut(&export_name_hash) {
                 let fn_addr = ntdll
                     .exports
-                    .get_function(ntdll.module_base, index as isize)?;
+                    .get_function(index as isize)?;
                 let fn_ssn = ntdll.exports.get_ssn(fn_addr);
+                let random_syscall = ntdll.exports.get_random(fn_addr)?;
+
+                let fn_name = ntdll.exports.read_name(index as isize)?;
+                println!("[+] for SSN 0x{:02x?}: \n\t|_['{}']: \tOK\n", fn_ssn, fn_name);
 
                 syscall.ssn = fn_ssn;
                 syscall.address = fn_addr;
-
-                // TODO: implement fetching address of a random syscall
-
+                syscall.random = random_syscall;
             }
         }
 

@@ -8,6 +8,12 @@ anyhow = "1.0.96"
 lazy_static = "1.5.0"
 common = { path = "../common" }
 
+[dependencies.iced-x86]
+version = "1.21.0"
+features = ["code_asm"]
+#default-features = false
+#features = ["std", "decoder", "masm"]
+
 [dependencies.windows]
 version = "0.60.0"
 features = [

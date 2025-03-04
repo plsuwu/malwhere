@@ -1,8 +1,17 @@
+//! Fetching and parsing of `.dll` modules.
+//!
+//! Currently only implements fetching `ntdll.dll` via an offset from the module's
+//! `LoaderData` field.
+//!
+//! TODO:
+//!     needs refactoring out to split between syscall vs. module retrieval
+
 use crate::environment_block::read_gs::GetBlock;
 use crate::environment_block::types::{
     LDR_DATA_TABLE_ENTRY, PEB_LDR_DATA, PROCESS_ENVIRONMENT_BLOCK,
 };
 use lazy_static::lazy_static;
+use rand::random_range;
 use std::ffi::{c_void, CStr};
 use windows::Win32::System::Diagnostics::Debug::IMAGE_NT_HEADERS64;
 use windows::Win32::System::SystemServices::{
@@ -10,14 +19,8 @@ use windows::Win32::System::SystemServices::{
 };
 
 pub const IMAGE_DIRECTORY_ENTRY_EXPORT: usize = 0;
-const SYSCALL_OPCODES: [u8; 6] = [
-    0x4c,
-    0x8b,
-    0xd1,
-    0xb8,
-    0x00,
-    0x00,
-];
+const SYSCALL_OPCODES: [u8; 6] = [0x4c, 0x8b, 0xd1, 0xb8, 0x00, 0x00];
+const SYSCALL_INSTRUCTION: [u8; 2] = [0x0f, 0x05];
 
 const JMP_OPCODE: u8 = 0xe9;
 const DOWN: isize = 32;
@@ -101,7 +104,9 @@ pub struct ModuleExports {
     pub names_array: *mut u32,
     pub addrs_array: *mut u32,
     pub ordls_array: *mut u16,
+    pub module_base: *mut c_void,
     pub export_directory: *mut IMAGE_EXPORT_DIRECTORY,
+    pub syscall_index_bounds: Option<(isize, isize)>,
 }
 
 impl ModuleExports {
@@ -135,25 +140,97 @@ impl ModuleExports {
             names_array,
             addrs_array,
             ordls_array,
+            module_base,
             export_directory: export_addr,
+            syscall_index_bounds: None,
         })
     }
 
-    pub fn read_name(&self, module_base: *mut c_void, index: isize) -> anyhow::Result<String> {
+    pub fn read_name(&self, index: isize) -> anyhow::Result<String> {
         let rva = unsafe { *self.names_array.offset(index) };
-        let name =
-            unsafe { CStr::from_ptr(module_base.byte_offset(rva as isize) as *mut i8).to_str()? };
+        let name = unsafe {
+            CStr::from_ptr(self.module_base.byte_offset(rva as isize) as *mut i8).to_str()?
+        };
 
         Ok(name.to_string())
     }
 
-    pub fn get_function(&self, module_base: *mut c_void, index: isize) -> anyhow::Result<*mut c_void> {
-
+    pub fn get_function(&self, index: isize) -> anyhow::Result<*mut c_void> {
         let ord_index = unsafe { *self.ordls_array.offset(index) };
         let fn_rva = unsafe { *self.addrs_array.offset(ord_index as isize) };
-        let fn_address = unsafe { module_base.byte_add(fn_rva as usize) };
+        let fn_address = unsafe { self.module_base.byte_add(fn_rva as usize) };
 
         Ok(fn_address)
+    }
+
+    // this would be more efficient as a binary search but it just gets
+    // increasingly complex
+    pub fn syscall_subset(&mut self) -> anyhow::Result<()> {
+        let mut lower: isize = -1;
+        let mut upper: isize = -1;
+        for i in 0..self.names_count as isize {
+            let curr = self
+                .get_curr(i as usize)
+                .starts_with("Nt");
+            if curr && lower == -1 {
+                lower = i;
+            }
+
+            if !curr && lower > -1 {
+                upper = i;
+                break;
+            }
+        }
+
+        self.syscall_index_bounds = Some((lower, upper));
+        Ok(())
+    }
+
+    fn get_curr(&self, mid: usize) -> String {
+        String::from_iter(
+            self.read_name(mid as isize)
+                .unwrap()
+                .chars()
+                .take(2)
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    pub fn get_random(&mut self, _addr: *const c_void) -> anyhow::Result<*mut c_void> {
+        if self.syscall_index_bounds.is_none() {
+            self.syscall_subset()?;
+        }
+        let rand_index = {
+            let range_size =
+                self.syscall_index_bounds.unwrap().1 - self.syscall_index_bounds.unwrap().0;
+            let index_offset = random_range(0..range_size as usize);
+            self.syscall_index_bounds.unwrap().0 as usize + index_offset
+        };
+
+        // let name = self.read_name(rand_index as isize)?;
+        let addr = self.get_function(rand_index as isize)? as *const u8;
+
+        // let rand_addr = unsafe { addr.offset(0xff) } as *mut u8;
+
+        for &dir in &[1, -1] {
+            for idx in 0..=0xff {
+                let bytes = unsafe {
+                    let offset = addr.byte_offset(idx * dir);
+                    [*offset, *offset.byte_add(1)]
+                };
+
+                if bytes == SYSCALL_INSTRUCTION {
+                    unsafe { return Ok(addr.byte_offset(idx * dir) as *mut c_void ) }
+                }
+            }
+        }
+
+        Err(anyhow::anyhow!(
+            "[x] Could not find syscall near 0xff + syscall_address: '{:?}'.",
+            addr
+        ))
+        //     name
+        // ))
     }
 
     pub fn get_ssn(&self, address: *mut c_void) -> u32 {
@@ -165,60 +242,52 @@ impl ModuleExports {
 
     // TODO: implement testing for this with patched hooking
     pub fn check_neighbor(&self, address: *mut c_void) -> anyhow::Result<u32> {
-        for idx in 1..0xff {
-
-            let neighbor = unsafe { address.byte_offset(idx * DOWN) };
-            if let Some(ssn) = self.match_bytes(neighbor) {
-                return Ok(ssn)
+        let directions = &[DOWN, UP];
+        for &dir in directions {
+            for idx in 1..0xff {
+                let neighbor = unsafe { address.byte_offset(idx * dir) };
+                if let Some(ssn) = self.match_bytes(neighbor) {
+                    return Ok(ssn);
+                }
             }
         }
 
-        for idx in 1..0xff {
-
-            let neighbor = unsafe { address.byte_offset(idx * UP) };
-            if let Some(ssn) = self.match_bytes(neighbor) {
-                return Ok(ssn)
-            }
-        }
-
-        Err(anyhow::anyhow!("[x] Unable to validate function opcodes in neighboring bytes."))
+        Err(anyhow::anyhow!(
+            "[x] Unable to validate function opcodes in neighboring bytes."
+        ))
     }
 
     pub fn match_bytes(&self, address: *mut c_void) -> Option<u32> {
-        let func_bytes: [u8; 6] = unsafe {[
-            *((address as u64) as *const u8),
-            *((address as u64 + 1) as *const u8),
-            *((address as u64 + 2) as *const u8),
-            *((address as u64 + 3) as *const u8),
-            *((address as u64 + 6) as *const u8),
-            *((address as u64 + 7) as *const u8),
-        ]};
+        unsafe {
+            let ptr = address as *const u8;
+            let fn_bytes = [
+                *ptr,
+                *ptr.add(1),
+                *ptr.add(2),
+                *ptr.add(3),
+                *ptr.add(6),
+                *ptr.add(7),
+            ];
 
-        if func_bytes == SYSCALL_OPCODES {
-            return Some(self.get_ssn(address))
+            if fn_bytes == SYSCALL_OPCODES {
+                return Some(self.get_ssn(address));
+            }
         }
 
         None
     }
 
     pub fn verify_bytes(&self, address: *mut c_void) -> anyhow::Result<u32> {
-        if let Some(ssn) = self.match_bytes(address)  {
-            return Ok(ssn)
+        if let Some(ssn) = self.match_bytes(address) {
+            return Ok(ssn);
         }
 
-        // not really a reliable implementation until bytepatch hooking is
-        // also implemented for testing purposes :/
-        //
-        // (my brain tells me this implementation is at least slightly
-        // broken lmao)
-        if unsafe { *((address as u64) as *const u8) } == JMP_OPCODE ||
-            unsafe { *((address as u64 + 2) as *const u8)} == JMP_OPCODE
-        {
-            println!("[ ] Function appears to be hooked.");
-            self.check_neighbor(address)?;
+        unsafe {
+            let ptr = address as *const u8;
+            if *ptr == JMP_OPCODE || *ptr.add(2) == JMP_OPCODE {
+                return self.check_neighbor(address);
+            }
         }
-
-
 
         Err(anyhow::anyhow!("[x] Couldn't validate SSN."))
     }
@@ -227,6 +296,7 @@ impl ModuleExports {
 #[repr(C)]
 #[derive(Debug)]
 pub struct Module {
+    pub module_name: String,
     pub module_base: *mut c_void,
     pub exports: ModuleExports,
 }
@@ -252,6 +322,8 @@ impl Module {
                 .Flink
                 .byte_offset(-0x10) as *mut LDR_DATA_TABLE_ENTRY
         };
+
+        let module_name = unsafe { (*loader_entry).BaseDllName.Buffer.to_string()? };
         let module_base = unsafe { (*loader_entry).DllBase };
 
         // confirm our location and carve out function export directory
@@ -260,6 +332,7 @@ impl Module {
 
         let exports = ModuleExports::new(module_base, export_addr)?;
         Ok(Self {
+            module_name,
             module_base,
             exports,
         })
