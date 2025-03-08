@@ -91,16 +91,15 @@ pub unsafe extern "system" fn syscall_1(arg: u64) -> i32 {
 /// > Note: A syscall number and address needs to be set by calling `set_syscall` prior to calling
 /// > this function!
 ///
-/// Accepts a three-item array of `u64`s - use `std::mem::transmute` or the `as` keyword to cast
-/// variables to the correct type:
+/// Accepts a pointer to a three-item array of `u64`s - use `std::mem::transmute` or the `as` 
+/// keyword to cast variables to the correct type:
 ///
 /// ```ignore
 /// // set the syscall number and address (automatically
 /// // resolved - see the resolver module)
 /// set_syscall(ssn, random_address);
 ///
-/// // needs to be mutable for the inline assembly
-/// let mut syscall_args: [u64; 3] = [
+/// let syscall_args: [u64; 3] = [
 ///     transmute(&mut process_handle),
 ///     null_mut::<c_void>() as u64,
 ///
@@ -108,7 +107,7 @@ pub unsafe extern "system" fn syscall_1(arg: u64) -> i32 {
 ///
 /// ];
 ///
-/// let syscall = syscall_3(mut syscall_args);
+/// let syscall = syscall_3(syscall_args.as_ptr());
 /// ```
 pub unsafe extern "system" fn syscall_3(args: *const u64) -> i32 {
     let mut res: i32 = 0;
@@ -144,16 +143,15 @@ pub unsafe extern "system" fn syscall_3(args: *const u64) -> i32 {
 /// > Note: A syscall number and address needs to be set by calling `set_syscall` prior to calling
 /// > this function!
 ///
-/// Accepts a five-item array of `u64`s - use `std::mem::transmute` or the `as` keyword to cast
-/// variables to the correct type:
+/// Accepts a pointer to a five-item array of `u64`s - use `std::mem::transmute` or the `as` 
+/// keyword to cast variables to the correct type:
 ///
 /// ```ignore
 /// // set the syscall number and address (automatically
 /// // resolved - see the resolver module)
 /// set_syscall(ssn, random_address);
 ///
-/// // needs to be mutable for the inline assembly
-/// let mut syscall_args: [u64; 5] = [
+/// let syscall_args: [u64; 5] = [
 ///     transmute(&mut process_handle),
 ///     null_mut::<c_void>() as u64,
 ///
@@ -161,7 +159,7 @@ pub unsafe extern "system" fn syscall_3(args: *const u64) -> i32 {
 ///
 /// ];
 ///
-/// let syscall = syscall_5(mut syscall_args);
+/// let syscall = syscall_5(syscall_args.as_ptr());
 /// ```
 pub unsafe extern "system" fn syscall_5(args: *const u64) -> i32 {
     let mut res: i32 = 0;
@@ -200,16 +198,15 @@ pub unsafe extern "system" fn syscall_5(args: *const u64) -> i32 {
 /// > Note: A syscall number and address needs to be set by calling `set_syscall` prior to calling
 /// > this function!
 ///
-/// Accepts a six-item array of `u64`s - use `std::mem::transmute` or the `as` keyword to cast
-/// variables to the correct type:
+/// Accepts a pointer to a six-item array of `u64`s - use `std::mem::transmute` or the `as` 
+/// keyword to cast variables to the correct type:
 ///
 /// ```ignore
 /// // set the syscall number and address (automatically
 /// // resolved - see the resolver module)
 /// set_syscall(ssn, random_address);
 ///
-/// // needs to be mutable for the inline assembly
-/// let mut syscall_args: [u64; 6] = [
+/// let syscall_args: [u64; 6] = [
 ///     transmute(&mut process_handle),
 ///     null_mut::<c_void>() as u64,
 ///
@@ -217,7 +214,7 @@ pub unsafe extern "system" fn syscall_5(args: *const u64) -> i32 {
 ///
 /// ];
 ///
-/// let syscall = syscall_6(mut syscall_args);
+/// let syscall = syscall_6(syscall_args.as_ptr());
 /// ```
 pub unsafe extern "system" fn syscall_6(args: *const u64) -> i32 {
     let mut res: i32 = 0;
@@ -266,16 +263,15 @@ pub unsafe extern "system" fn syscall_6(args: *const u64) -> i32 {
 /// > Note: A syscall number and address needs to be set by calling `set_syscall` prior to calling
 /// > this function!
 ///
-/// Accepts an eleven-item array of `u64`s - use `std::mem::transmute` or the `as` keyword to cast
-/// variables to the correct type:
+/// Accepts an pointer to an eleven-item array of `u64`s - use `std::mem::transmute` or the `as` 
+/// keyword to cast variables to the correct type:
 ///
 /// ```ignore
 /// // set the syscall number and address (automatically
 /// // resolved - see the resolver module)
 /// set_syscall(ssn, random_address);
 ///
-/// // needs to be mutable for the inline assembly
-/// let mut syscall_args: [u64; 11] = [
+/// let syscall_args: [u64; 11] = [
 ///     transmute(&mut process_handle),
 ///     null_mut::<c_void>() as u64,
 ///
@@ -283,7 +279,7 @@ pub unsafe extern "system" fn syscall_6(args: *const u64) -> i32 {
 ///
 /// ];
 ///
-/// let syscall = syscall_11(mut syscall_args);
+/// let syscall = syscall_11(syscall_args.as_ptr());
 /// ```
 pub unsafe extern "system" fn syscall_11(args: *const u64) -> i32 {
     let mut res: i32 = 0;
