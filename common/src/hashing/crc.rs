@@ -43,8 +43,9 @@ impl HashFunction for Crc32b {
     }
 }
 
+/// Broken implementation
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub struct Crc32h;
+struct Crc32h;
 
 impl HashFunction for Crc32h {
     type Output = u32;

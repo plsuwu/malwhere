@@ -2,9 +2,12 @@
 
 use super::traits::HashFunction;
 
-pub struct LoseLose;
+/// I think very high number of hash collisions.
+/// Regardless - broken implementation.
+#[derive(Debug, Copy, Clone, PartialEq)]
+struct LoseLose;
 
-impl HashFunction for LoseLose { 
+impl HashFunction for LoseLose {
     type Output = u32;
 
     fn hash_str(&self, s: &str) -> Self::Output {
@@ -17,8 +20,8 @@ impl HashFunction for LoseLose {
         hash
     }
 
-    fn hash_vec(&self, v: Vec<&str>) -> Vec<Self::Output> {
-        let res = v.iter().map(|s| self.hash_str(*s)).collect::<Vec<_>>();
-        res
-    }
+    // fn hash_vec(&self, v: Vec<&str>) -> Vec<Self::Output> {
+    //     let res = v.iter().map(|s| self.hash_str(*s)).collect::<Vec<_>>();
+    //     res
+    // }
 }

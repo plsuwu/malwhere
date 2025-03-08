@@ -3,6 +3,7 @@
 use std::ops::BitXor;
 use super::traits::HashFunction;
 
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Fnv;
 
 impl HashFunction for Fnv {

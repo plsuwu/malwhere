@@ -225,8 +225,10 @@ impl ModuleExports {
             }
         }
 
+        let name = self.read_name(rand_index as isize)?;
         Err(anyhow::anyhow!(
-            "[x] Could not find syscall near 0xff + syscall_address: '{:?}'.",
+            "[x] Could not find syscall for '{:?}' near 0xff + syscall_address: '{:?}'.",
+            name,
             addr
         ))
         //     name

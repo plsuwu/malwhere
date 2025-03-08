@@ -1,6 +1,6 @@
 use std::arch::asm;
 
-use super::types::{PROCESS_ENVIRONMENT_BLOCK as PEB};
+use super::types::PROCESS_ENVIRONMENT_BLOCK as PEB;
 use windows::Win32::System::Threading::TEB;
 // use windows::Win32::System::Threading::PEB;
 

@@ -49,16 +49,24 @@ impl<T: Hash + Eq, H: HashFunction<Output = T>> SyscallMap<T, H> {
 
         for index in 0..ntdll.exports.funcs_count {
             let export_name = ntdll.exports.read_name(index as isize)?;
+
             let export_name_hash = self.hasher.hash(export_name.as_str());
+
             if let Some(syscall) = self.syscalls.get_mut(&export_name_hash) {
                 let fn_addr = ntdll
                     .exports
                     .get_function(index as isize)?;
+
+                // println!("\t{:016x?}\n{:#016x?}", &export_name_hash, syscall);
+
                 let fn_ssn = ntdll.exports.get_ssn(fn_addr);
                 let random_syscall = ntdll.exports.get_random(fn_addr)?;
 
-                let fn_name = ntdll.exports.read_name(index as isize)?;
-                println!("[+] for SSN 0x{:02x?}: \n\t|_['{}']: \tOK\n", fn_ssn, fn_name);
+                // -- debugging stuff -----------------------------------------------------
+                // let fn_name = ntdll.exports.read_name(index as isize)?;
+                // println!("[+] for SSN 0x{:02x?}: \n\t|_['{}']: \tOK\n", fn_ssn, fn_name);
+                // println!("[?] address -> {:016x?}", fn_addr);
+                // ------------------------------------------------------------------------
 
                 syscall.ssn = fn_ssn;
                 syscall.address = fn_addr;
