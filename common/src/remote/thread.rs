@@ -3,14 +3,12 @@
 use super::process::Processes;
 use crate::remote::types::SYSTEM_THREAD_INFORMATION;
 use windows::Win32::Foundation::*;
-
 #[repr(C, align(16))]
 #[derive(Debug, Copy, Clone)]
 pub struct Thread {
     pid: HANDLE,
     tid: HANDLE,
 }
-
 impl Thread {
     /// Returns a new `Thread` struct containing a Process's ID (`pid`) and the main thread ID
     /// for that process (`tid`).
@@ -42,6 +40,7 @@ impl Thread {
     }
 
     /// Prints some details about a target process's threads to `stdout`:
+    ///
     /// * Thread ID
     /// * Start address
     /// * Priority

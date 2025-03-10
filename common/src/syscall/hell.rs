@@ -42,7 +42,6 @@ pub extern "system" fn set_syscall(syscall: u32, address: u64) {
 /// > Note: This function is intended to be called from assembly after storing the syscall's
 /// > necessary arguments in the correct registers and pushing the return address to the top of
 /// > the stack.
-#[no_mangle]
 pub unsafe extern "system" fn descend() {
     asm!(
         // Rust keeps compiling this in the most annoying way where jumping to pointer stored in a
@@ -110,6 +109,7 @@ pub unsafe extern "system" fn syscall_1(arg: u64) -> i32 {
 ///
 /// let syscall = syscall_3(mut syscall_args);
 /// ```
+#[inline(never)]
 pub unsafe extern "system" fn syscall_3(args: *const u64) -> i32 {
     let mut res: i32 = 0;
 
@@ -117,16 +117,42 @@ pub unsafe extern "system" fn syscall_3(args: *const u64) -> i32 {
         // Shadow space seems to be automatically allocated by the function call (I think...) so
         // the changes to the stack pointer are meant to account for the pointer workaround in the
         // `descend` function above.
-        "sub rsp, 0x08",
+        // "sub rsp, 0x08",
 
         "mov r10, rcx",
         "call {d}",
 
-        "add rsp, 0x08",
+        // "add rsp, 0x08",
 
         in("rcx") *args.wrapping_add(0),
         in("rdx") *args.wrapping_add(1),
         in("r8") *args.wrapping_add(2),
+
+        d = sym descend,
+        out("rax") res,
+
+        options(nostack),
+    );
+
+    res
+}
+
+#[inline(never)]
+pub unsafe extern "system" fn syscall_4(args: *const u64) -> i32 {
+    let mut res: i32 = 0;
+
+    asm!(
+        // "sub rsp, 0x08",
+
+        "mov r10, rcx",
+        "call {d}",
+
+        // "add rsp, 0x08",
+
+        in("rcx") *args.wrapping_add(0),
+        in("rdx") *args.wrapping_add(1),
+        in("r8") *args.wrapping_add(2),
+        in("r9") *args.wrapping_add(3),
 
         d = sym descend,
         out("rax") res,

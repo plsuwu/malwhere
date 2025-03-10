@@ -1,9 +1,9 @@
 use anyhow::Result;
-use common::environment_block::module::Module;
-use common::hashing::traits::{HashFunction, StringHasher};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
+use crate::environment_block::module::Module;
+use crate::hashing::traits::{HashFunction, StringHasher};
 
 /// Details for an arbitrary syscall
 #[repr(C)]
@@ -56,8 +56,6 @@ impl<T: Hash + Eq, H: HashFunction<Output = T>> SyscallMap<T, H> {
                 let fn_addr = ntdll
                     .exports
                     .get_function(index as isize)?;
-
-                // println!("\t{:016x?}\n{:#016x?}", &export_name_hash, syscall);
 
                 let fn_ssn = ntdll.exports.get_ssn(fn_addr);
                 let random_syscall = ntdll.exports.get_random(fn_addr)?;

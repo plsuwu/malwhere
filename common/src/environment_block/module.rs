@@ -39,8 +39,6 @@ unsafe impl Send for PEB_LDR_DATA {}
 unsafe impl Sync for PROCESS_ENVIRONMENT_BLOCK {}
 unsafe impl Send for PROCESS_ENVIRONMENT_BLOCK {}
 
-#[repr(C)]
-#[derive(Debug)]
 /// Initializes relative virtual addresses (RVAs) for the module's exported function arrays
 /// alongside some helpful metadata
 ///
@@ -98,6 +96,8 @@ unsafe impl Send for PROCESS_ENVIRONMENT_BLOCK {}
 /// // (this occasionally varies from version to version)
 /// assert_eq!(name_str, "NtAllocateVirtualMemoryEx");
 /// ```
+#[repr(C)]
+#[derive(Debug)]
 pub struct ModuleExports {
     pub names_count: u32,
     pub funcs_count: u32,

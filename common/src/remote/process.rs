@@ -1,12 +1,15 @@
 //! Remote process enumeration tooling (work in progress)
 
+use crate::hashing::fnv::Fnv;
 use crate::remote::types::SYSTEM_PROCESS_INFORMATION;
+use crate::syscall::hell::{set_syscall, syscall_4};
+use crate::syscall::resolver::SyscallMap;
 use lazy_static::lazy_static;
 use std::ffi::c_void;
+use std::mem::transmute;
 use std::ptr::null_mut;
-use windows::core::PCSTR;
-use windows::Wdk::System::SystemInformation::{SystemProcessInformation, SYSTEM_INFORMATION_CLASS};
-use windows::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
+use windows::Wdk::System::SystemInformation::SYSTEM_INFORMATION_CLASS;
+
 #[allow(non_snake_case)]
 type NtQuerySystemInformation = unsafe extern "system" fn(
     SystemInformationClass: SYSTEM_INFORMATION_CLASS,
@@ -14,6 +17,8 @@ type NtQuerySystemInformation = unsafe extern "system" fn(
     SystemInformationLength: i32,
     ReturnLength: *mut i32,
 ) -> i32;
+
+const SYSTEM_PROCESS_INFORMATION_FLAG: i32 = 5;
 
 lazy_static! {
     pub(crate) static ref PROCESSES: Processes = Processes::enum_all().unwrap();
@@ -44,47 +49,53 @@ impl Processes {
     fn enum_all() -> anyhow::Result<Self> {
         let mut process_information: Vec<SYSTEM_PROCESS_INFORMATION> = Vec::new();
 
-        /* ---------------------------------------------------------------------------------
-         * TODO:
-         *  replace this with indirect syscall invocation when the module is implemented :)
-         * --------------------------------------------------------------------------------- */
-        let libname = PCSTR(c"NTDLL.DLL".as_ptr() as _);
-        let funcname = PCSTR(c"NtQuerySystemInformation".as_ptr() as _);
 
-        let query_system_information: NtQuerySystemInformation = unsafe {
-            let proc = GetProcAddress(GetModuleHandleA(libname)?, funcname).unwrap();
-            std::mem::transmute(proc)
-        };
+        let mut hashes: Vec<u32> = vec![0x6619e14a];
+        let mut table = SyscallMap::new(&mut hashes, Fnv);
+
+        table.resolve()?;
+
+        println!("RESOLVED SYSCALL TABLE: {:#016x?}", table);
 
         let mut alloc_size = 0;         // determines how much data to read
         let mut return_length = 0;      // technically unused but here we are
 
         unsafe {
-            // initial query to fetch size of all `SYSTEM_PROCESS_INFORMATION` structs in memory
-            //
-            // i don't know if Rust will resize my allocation automatically or if Windows will just
-            // eat shit and `STATUS_ACCESS_VIOLATION` me + i cant be bothered finding out rn
-            let mut _status = query_system_information(
-                SystemProcessInformation,   // replace w/ `5i32`
-                null_mut(),
-                0,
-                &mut alloc_size
-            );
+
+            let mut args: [u64; 4] = [
+                SYSTEM_PROCESS_INFORMATION_FLAG as u64,
+                null_mut::<c_void>() as u64,
+                null_mut::<c_void>() as u64,
+                transmute(&mut alloc_size),
+            ];
+
+            let s = table.syscalls.get(&hashes[0]).unwrap();
+            set_syscall(s.ssn, s.random as u64);
+
+            let mut _status = syscall_4(args.as_ptr());
+
+            // println!("NTSTATUS: {:#016x?}", _status);
+            // println!("ALLOC: {:#016x?}", alloc_size);
 
             // allocate heap space with the size of the linked list
             let mut bytes: Vec<u8> = Vec::with_capacity(alloc_size as usize);
             bytes.fill(0);
 
             // second query to copy list into allocation
-            _status = query_system_information(
-                SystemProcessInformation,
-                bytes.as_ptr() as _,
-                alloc_size,
-                &mut return_length,
-            );
+            args = [
+                SYSTEM_PROCESS_INFORMATION_FLAG as u64,
+                transmute(bytes.as_ptr() as *mut c_void),
+                alloc_size as u64,
+                transmute(&mut return_length),
+            ];
+
+            println!("args 2: {:016x?}", args);
+
+            _status = syscall_4(args.as_ptr());
 
             // convert raw bytes to a pointer to the first list item
-            let head_ptr = bytes.as_ptr() as *const SYSTEM_PROCESS_INFORMATION;
+            let head_ptr =
+                bytes.as_ptr() as *const SYSTEM_PROCESS_INFORMATION;
             let mut curr_node_ptr = head_ptr;
 
             // traverse list and push each node to a vector
