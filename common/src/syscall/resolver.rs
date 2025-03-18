@@ -1,9 +1,16 @@
-use anyhow::Result;
-use std::collections::HashMap;
-use std::fmt::Debug;
-use std::hash::Hash;
 use crate::environment_block::module::Module;
 use crate::hashing::traits::{HashFunction, StringHasher};
+use alloc::vec::Vec;
+use anyhow::anyhow;
+use anyhow::Result;
+use core::ffi::c_void;
+use core::fmt::Debug;
+use core::hash::Hash;
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum WinDll {
+    Ntdll,
+}
 
 /// Details for an arbitrary syscall
 #[repr(C)]
@@ -12,66 +19,105 @@ pub struct Syscall {
     /// Syscall number
     pub ssn: u32,
     /// Address of syscall
-    pub address: *const std::ffi::c_void,
+    pub address: *const c_void,
     /// Random `syscall` instruction in `NTDLL`
-    pub random: *const std::ffi::c_void,
+    pub random: *const c_void,
 }
 
+impl Syscall {
+    pub fn zeroed() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
+
+    /// clear syscall after use
+    pub fn clean(&mut self) {
+        *self = Self::zeroed();
+    }
+}
 
 #[repr(C)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SyscallMap<T: Hash + Eq, H: HashFunction> {
-    pub syscalls: HashMap<T, Syscall>,
+pub struct SyscallMap<T: Hash + Eq + Copy, H: HashFunction<Output = T>> {
+    pub hashes: Vec<T>,
     pub hasher: StringHasher<H>,
+    dll: WinDll,
+    syscall: Syscall,
+    index: Option<usize>,
+    module: Option<Module>,
 }
 
-impl<T: Hash + Eq, H: HashFunction<Output = T>> SyscallMap<T, H> {
-    pub fn new(hashed_calls: &mut [T], hash_function: H) -> Self
+impl<'a, T: Hash + Eq + Copy + Debug, H: HashFunction<Output = T>> SyscallMap<T, H> {
+    pub fn new(hashes: &[T], hash_function: H, dll: WinDll) -> Self
     where
         T: Sized + Copy + Hash + Eq,
     {
-        let mut syscalls = HashMap::new();
-        hashed_calls.iter().for_each(|&h| {
-            let syscall_empty = unsafe { std::mem::zeroed() };
-            syscalls.insert(h, syscall_empty);
-        });
-
         let hasher = StringHasher::new(hash_function);
+        let module = Some(Self::init(&dll).unwrap());
 
-        Self { syscalls, hasher }
+        Self {
+            hashes: hashes.to_vec(),
+            hasher,
+            dll,
+            syscall: Syscall::zeroed(),
+            index: None,
+            module,
+        }
     }
 
-    pub fn resolve(&mut self) -> Result<()>
+    pub fn init(dll: &WinDll) -> Result<Module> {
+        match dll {
+            WinDll::Ntdll => Ok(Module::ntdll()?),
+        }
+    }
+
+    pub fn resolve(&mut self, index: usize) -> Result<&Syscall>
     where
         <H as HashFunction>::Output: Debug,
     {
-        let mut ntdll = Module::ntdll()?;
+        if index >= self.hashes.len() {
+            Err(anyhow!("Invalid index '{}'", index))?
+        }
 
-        for index in 0..ntdll.exports.funcs_count {
-            let export_name = ntdll.exports.read_name(index as isize)?;
+        if self.index == Some(index) {
+            return Ok(&self.syscall);
+        }
 
-            let export_name_hash = self.hasher.hash(export_name.as_str());
+        // initialize by zeroing current syscall
+        self.syscall.clean();
+        self.index = None;
 
-            if let Some(syscall) = self.syscalls.get_mut(&export_name_hash) {
-                let fn_addr = ntdll
-                    .exports
-                    .get_function(index as isize)?;
+        let module = self.module.as_mut().unwrap();
+        let hash = self.hashes[index].clone();
+        let mut found = false;
 
-                let fn_ssn = ntdll.exports.get_ssn(fn_addr);
-                let random_syscall = ntdll.exports.get_random(fn_addr)?;
+        for idx in 0..module.exports.funcs_count {
+            let export_name = module.exports.read_name(idx as isize)?;
+            let export_hash = self.hasher.hash(export_name.as_str());
 
-                // -- debugging stuff -----------------------------------------------------
-                // let fn_name = ntdll.exports.read_name(index as isize)?;
-                // println!("[+] for SSN 0x{:02x?}: \n\t|_['{}']: \tOK\n", fn_ssn, fn_name);
-                // println!("[?] address -> {:016x?}", fn_addr);
-                // ------------------------------------------------------------------------
+            if export_hash == hash {
+                let fn_addr = module.exports.get_function(idx as isize)?;
+                let fn_ssn = module.exports.get_ssn(fn_addr);
+                let random_syscall = module.exports.get_random(fn_addr)?;
 
-                syscall.ssn = fn_ssn;
-                syscall.address = fn_addr;
-                syscall.random = random_syscall;
+                self.syscall.ssn = fn_ssn;
+                self.syscall.address = fn_addr;
+                self.syscall.random = random_syscall;
+
+                found = true;
+                break;
             }
         }
 
-        Ok(())
+        if found {
+            self.index = Some(index);
+            Ok(&self.syscall)
+        } else {
+            Err(anyhow!("Invalid index '{}'", index))?
+        }
+    }
+
+    pub fn clean(&mut self) {
+        self.syscall.clean();
+        self.index = None;
     }
 }

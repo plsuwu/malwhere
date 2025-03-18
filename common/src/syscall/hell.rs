@@ -1,127 +1,85 @@
-//! Low-level syscall routing functionality
+//! Low-level indirect syscall functionality ("Hell's Hall" implementation)
 //!
 //! Inline Rust assembly doesn't seem to be the most intuitive so this is a lot of work based on
-//! hacky trial-and-error register manipulation. It works as intended, but it's not super modular
-//! and clear, unfortunately.
+//! hacky trial-and-error register manipulation. It works as intended for now, but it's not super
+//! modular or clear, and some very inconsequential statements prior to calling one of the below
+//! functions containing an `asm!` macro can cause them to break for no clear reason; I currently
+//! don't understand *why* this happens - e.g:
+//!
+//! Making a `NtProtectVirtualMemory` call will return an `NTSTATUS` of `0xC000000D` (i.e
+//! `STATUS_INVALID_PARAMETER`), but creating a completely unused format string that renders an
+//! arbitrary pointer as a 16-digit hex string (e.g `_ = format!("{:016x?}", "a".as_ptr())`) will
+//! pass the exact same set of arguments to the `NtProtectVirtualMemory` syscall which will
+//! complete successfully. ASLR aside, it does not appear that the arguments have meaningfully
+//! changed when stepping through the program in a debugger.
+//!
+//! :(
 
 #![allow(unused_assignments)]
 
-use std::arch::asm;
+use core::arch::asm;
 
 static mut SYSTEM_CALL: u32 = 0;
 static mut INSTRUCTION_ADDRESS: u64 = 0;
 
 pub extern "system" fn set_syscall(syscall: u32, address: u64) {
+
+    unsafe {
+        SYSTEM_CALL = syscall;
+        INSTRUCTION_ADDRESS = address;
+    }
+
+}
+
+pub extern "system" fn clear_syscall() {
     unsafe {
         SYSTEM_CALL = 0;
-        SYSTEM_CALL = syscall;
-
         INSTRUCTION_ADDRESS = 0;
-        INSTRUCTION_ADDRESS = address;
     }
 }
 
-/// Performs pre-syscall register manipulation
-///
-/// ```ignore
-/// mov rcx, r10
-/// mov eax, <syscall number>
-/// syscall
-/// ```
-///
-/// Where `syscall` is called from inside `ntdll.dll` address space (to avoid suspicious `syscall`
-/// instructions), this instruction is instead called by a `jmp` instruction to the location of
-/// a random `syscall` instruction in `ntdll.dll`:
-///
-/// ```ignore
-/// mov rcx, r10
-/// mov eax, 0x18   // `NtAllocateVirtualMemory` SSN
-/// jmp qword ptr ss:[ntdll.dll!syscall]
-/// ```
-///
-/// > Note: This function is intended to be called from assembly after storing the syscall's
-/// > necessary arguments in the correct registers and pushing the return address to the top of
-/// > the stack.
+#[inline(never)]
 pub unsafe extern "system" fn descend() {
     asm!(
-        // Rust keeps compiling this in the most annoying way where jumping to pointer stored in a
-        // register causes it to compile a jump to a pointer offset in the // data segment instead
-        // of the stack segment.
-        //
-        // I have no idea what the intended functionality is but this was my workaround (which I
-        // doubt is correct).
-        "mov qword ptr ss:[rsp+0x10], {1:r}",
+
+        "mov qword ptr ss:[rsp+0x08], {1:r}",
 
         "mov rcx, r10",
         "mov eax, {0:e}",
-        "jmp qword ptr ss:[rsp+0x10]",
+        "jmp qword ptr ss:[rsp+0x08]",
 
-        in(reg) SYSTEM_CALL,
-        in(reg) INSTRUCTION_ADDRESS,
-        options(nostack),
-    )
+        inout(reg) SYSTEM_CALL => _,
+        inout(reg) INSTRUCTION_ADDRESS => _,
+
+        options(nostack)
+    );
 }
 
+#[inline(never)]
 pub unsafe extern "system" fn syscall_1(arg: u64) -> i32 {
     let mut res: i32 = 0;
     asm!(
-        "sub rsp, 0x08",
 
         "mov r10, rcx",
         "call {d}",
-
-        "add rsp, 0x08",
 
         in("rcx") arg,
 
         d = sym descend,
         out("rax") res,
 
-        options(nostack),
+        clobber_abi("system"),
     );
 
     res
 }
 
-/// Correctly sets up arguments for a three-parameter syscall (e.g `NtWaitForSingleObject`).
-///
-/// # Usage
-///
-/// > Note: A syscall number and address needs to be set by calling `set_syscall` prior to calling
-/// > this function!
-///
-/// Accepts a pointer to a three-item array of `u64`s - use `std::mem::transmute` or the `as` 
-/// keyword to cast variables to the correct type:
-///
-/// ```ignore
-/// // set the syscall number and address (automatically
-/// // resolved - see the resolver module)
-/// set_syscall(ssn, random_address);
-///
-/// let syscall_args: [u64; 3] = [
-///     transmute(&mut process_handle),
-///     null_mut::<c_void>() as u64,
-///
-///     // etc...
-///
-/// ];
-///
-/// let syscall = syscall_3(syscall_args.as_ptr());
-/// ```
 #[inline(never)]
 pub unsafe extern "system" fn syscall_3(args: *const u64) -> i32 {
     let mut res: i32 = 0;
-
     asm!(
-        // Shadow space seems to be automatically allocated by the function call (I think...) so
-        // the changes to the stack pointer are meant to account for the pointer workaround in the
-        // `descend` function above.
-        // "sub rsp, 0x08",
-
         "mov r10, rcx",
         "call {d}",
-
-        // "add rsp, 0x08",
 
         in("rcx") *args.wrapping_add(0),
         in("rdx") *args.wrapping_add(1),
@@ -130,7 +88,7 @@ pub unsafe extern "system" fn syscall_3(args: *const u64) -> i32 {
         d = sym descend,
         out("rax") res,
 
-        options(nostack),
+        clobber_abi("system"),
     );
 
     res
@@ -141,12 +99,9 @@ pub unsafe extern "system" fn syscall_4(args: *const u64) -> i32 {
     let mut res: i32 = 0;
 
     asm!(
-        // "sub rsp, 0x08",
 
         "mov r10, rcx",
         "call {d}",
-
-        // "add rsp, 0x08",
 
         in("rcx") *args.wrapping_add(0),
         in("rdx") *args.wrapping_add(1),
@@ -156,50 +111,39 @@ pub unsafe extern "system" fn syscall_4(args: *const u64) -> i32 {
         d = sym descend,
         out("rax") res,
 
-        options(nostack),
+        clobber_abi("system"),
     );
 
     res
 }
 
-/// Correctly sets up arguments for a five-parameter syscall
-///
-/// # Usage
-///
-/// > Note: A syscall number and address needs to be set by calling `set_syscall` prior to calling
-/// > this function!
-///
-/// Accepts a pointer to a five-item array of `u64`s - use `std::mem::transmute` or the `as` 
-/// keyword to cast variables to the correct type:
-///
-/// ```ignore
-/// // set the syscall number and address (automatically
-/// // resolved - see the resolver module)
-/// set_syscall(ssn, random_address);
-///
-/// let syscall_args: [u64; 5] = [
-///     transmute(&mut process_handle),
-///     null_mut::<c_void>() as u64,
-///
-///     // etc...
-///
-/// ];
-///
-/// let syscall = syscall_5(syscall_args.as_ptr());
-/// ```
+#[inline(never)]
 pub unsafe extern "system" fn syscall_5(args: *const u64) -> i32 {
     let mut res: i32 = 0;
-
     asm!(
+    /*```
+        asquared31415 — 3/15/25, 4:53 AM
+        whenever you use a call you likely need to clobber_abi
+        [4:54 AM]
+        also at the bottom of the page i linked is the options:
+        > nostack means that the asm code does not push any data onto the stack.
+        [4:55 AM]
+        "i fix it by the end of the asm" is not sufficient for this option
+        [4:55 AM]
+        the stack being fixed by the end of the asm is just the default assumption
+    ```*/
         "push r11",
 
-        // make room on the stack for the stack segment pointer jump
-        "sub rsp, 0x20",
-
         "mov r10, rcx",
+
+        "sub rsp, 0x18",
+        "push r11",         // we push some random garbage to the stack here which
+                            // is overwritten with the address of the syscall instruction
         "call {d}",
 
-        "add rsp, 0x20",
+        "pop r11",          // pop the address back into `r11` before resetting the stack
+        "add rsp, 0x18",
+
         "pop r11",
 
         in("rcx") *args.wrapping_add(0),
@@ -211,60 +155,33 @@ pub unsafe extern "system" fn syscall_5(args: *const u64) -> i32 {
         d = sym descend,
 
         out("rax") res,
-        options(nostack),
+
+        clobber_abi("system"),
+
     );
 
     res
 }
 
-/// Correctly sets up arguments for a six-parameter syscall
-///
-/// # Usage
-///
-/// > Note: A syscall number and address needs to be set by calling `set_syscall` prior to calling
-/// > this function!
-///
-/// Accepts a pointer to a six-item array of `u64`s - use `std::mem::transmute` or the `as` 
-/// keyword to cast variables to the correct type:
-///
-/// ```ignore
-/// // set the syscall number and address (automatically
-/// // resolved - see the resolver module)
-/// set_syscall(ssn, random_address);
-///
-/// let syscall_args: [u64; 6] = [
-///     transmute(&mut process_handle),
-///     null_mut::<c_void>() as u64,
-///
-///     // etc...
-///
-/// ];
-///
-/// let syscall = syscall_6(syscall_args.as_ptr());
-/// ```
+#[inline(never)]
 pub unsafe extern "system" fn syscall_6(args: *const u64) -> i32 {
     let mut res: i32 = 0;
 
     asm!(
-        // space for return address on stack; seems like rustc
-        // is auto-allocating some stack space for shadow space
-        // for this test case but idk if that will remain true
-        // elsewhere
-
         "push r11",
         "push r10",
 
-        // make room on the stack for the stack segment pointer jump
-        "sub rsp, 0x20",
-
         "mov r10, rcx",
 
+        "sub rsp, 0x18",
+        "push r11",
         "call {d}",
 
-        "add rsp, 0x20",
+        "pop r11",
+        "add rsp, 0x18",
+
         "pop r10",
         "pop r11",
-
 
         in("rcx") *args.wrapping_add(0),
         in("rdx") *args.wrapping_add(1),
@@ -276,37 +193,55 @@ pub unsafe extern "system" fn syscall_6(args: *const u64) -> i32 {
         d = sym descend,
 
         out("rax") res,
-        options(nostack),
+
+        clobber_abi("system"),
     );
 
     res
 }
 
-/// Correctly sets up arguments for an eleven-parameter syscall
-///
-/// # Usage
-///
-/// > Note: A syscall number and address needs to be set by calling `set_syscall` prior to calling
-/// > this function!
-///
-/// Accepts an pointer to an eleven-item array of `u64`s - use `std::mem::transmute` or the `as` 
-/// keyword to cast variables to the correct type:
-///
-/// ```ignore
-/// // set the syscall number and address (automatically
-/// // resolved - see the resolver module)
-/// set_syscall(ssn, random_address);
-///
-/// let syscall_args: [u64; 11] = [
-///     transmute(&mut process_handle),
-///     null_mut::<c_void>() as u64,
-///
-///     // etc...
-///
-/// ];
-///
-/// let syscall = syscall_11(syscall_args.as_ptr());
-/// ```
+#[inline(never)]
+pub unsafe extern "system" fn syscall_7(args: *const u64) -> i32 {
+    let mut res: i32 = 0;
+
+    asm!(
+        "push r12",
+        "push r11",
+        "push r10",
+
+        "sub rsp, 0x18",
+
+        "mov r10, rcx",
+        "push r11",
+        "call {d}",
+
+        "pop r11",
+
+        "add rsp, 0x18",
+
+        "pop r10",
+        "pop r11",
+        "pop r12",
+
+        in("rcx") *args.wrapping_add(0),
+        in("rdx") *args.wrapping_add(1),
+        in("r8") *args.wrapping_add(2),
+        in("r9") *args.wrapping_add(3),
+        in("r10") *args.wrapping_add(4),
+        in("r11") *args.wrapping_add(5),
+        inout("r12") *args.wrapping_add(6) => _,
+
+        d = sym descend,
+
+        out("rax") res,
+
+        clobber_abi("system"),
+    );
+
+    res
+}
+
+#[inline(never)]
 pub unsafe extern "system" fn syscall_11(args: *const u64) -> i32 {
     let mut res: i32 = 0;
 
@@ -320,13 +255,16 @@ pub unsafe extern "system" fn syscall_11(args: *const u64) -> i32 {
         "push r11",
         "push r10",
 
-        // make room on the stack for the stack segment pointer jump
-        "sub rsp, 0x20",
+        "sub rsp, 0x18",
 
         "mov r10, rcx",
+        "push r11",
+
         "call {d}",
 
-        "add rsp, 0x20",
+        "pop r13",
+
+        "add rsp, 0x18",
 
         "pop r13",
         "pop r13",
@@ -342,15 +280,17 @@ pub unsafe extern "system" fn syscall_11(args: *const u64) -> i32 {
         in("r9") *args.wrapping_add(3),
         in("r10") *args.wrapping_add(4),
         in("r11") *args.wrapping_add(5),
-        in("rdi") *args.wrapping_add(6),
-        in("r12") *args.wrapping_add(7),
-        in("r13") *args.wrapping_add(8),
-        in("rsi") *args.wrapping_add(9),
-        in("r14") *args.wrapping_add(10),
+        inout("rdi") *args.wrapping_add(6) => _,
+        inout("r12") *args.wrapping_add(7) => _,
+        inout("r13") *args.wrapping_add(8) => _,
+        inout("rsi") *args.wrapping_add(9) => _,
+        inout("r14") *args.wrapping_add(10) => _,
 
         d = sym descend,
 
         out("rax") res,
+
+        clobber_abi("system"),
     );
 
     res

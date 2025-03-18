@@ -1,6 +1,6 @@
 //! Fowler-Noll-Vo hash function implementation
 
-use std::ops::BitXor;
+use core::ops::BitXor;
 use super::traits::HashFunction;
 
 #[derive(Debug, Copy, Clone, PartialEq)]

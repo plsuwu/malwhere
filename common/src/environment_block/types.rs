@@ -1,9 +1,11 @@
 #![allow(non_snake_case, non_camel_case_types)]
 
-use std::ffi::c_void;
+use core::ffi::c_void;
 use windows::Win32::Foundation::UNICODE_STRING;
-use windows::Win32::System::Kernel::LIST_ENTRY;
+use windows::Win32::System::Kernel::{LIST_ENTRY, STRING};
 // use windows::Win32::System::WindowsProgramming::*;
+
+const RTL_MAX_DRIVE_LETTERS: usize = 32;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -65,7 +67,7 @@ pub struct PROCESS_ENVIRONMENT_BLOCK {
     pub Mutant: *mut c_void,
     pub ImageBase: *mut c_void,
     pub LoaderData: *mut PEB_LDR_DATA,
-    pub ProcessParameters: *mut c_void,
+    pub ProcessParameters: *mut RTL_USER_PROCESS_PARAMETERS,
     pub SubSystemData: *mut c_void,
     pub ProcessHeap: *mut c_void,
     pub FastPebLock: *mut c_void,
@@ -178,3 +180,67 @@ pub struct LDR_DATA_TABLE_ENTRY {
     pub TimeDateStamp: u32,
 }
 
+#[repr(C)]
+pub struct CURDIR {
+    pub DosPath: UNICODE_STRING,
+    pub Handle: *mut c_void,
+}
+
+#[repr(C)]
+pub struct RTL_DRIVE_LETTER_CURDIR {
+    pub Flags: u16,
+    pub Length: u16,
+    pub TimeStamp: u32,
+    pub DosPath: STRING,
+}
+
+
+#[repr(C)]
+pub struct RTL_USER_PROCESS_PARAMETERS {
+    pub MaximumLength: u32,
+    pub Length: u32,
+    pub Flags: u32,
+    pub DebugFlags: u32,
+    pub ConsoleHandle: *mut c_void,
+    pub ConsoleFlags: u32,
+    pub StandardInput: *mut c_void,
+    pub StandardOutput: *mut c_void,
+    pub StandardError: *mut c_void,
+
+    pub CurrentDirectory: CURDIR,
+    pub DllPath: UNICODE_STRING,
+    pub ImagePathName: UNICODE_STRING,
+    pub CommandLine: UNICODE_STRING,
+
+    /// PBYTE
+    pub Environment: *mut u16,
+
+    pub StartingX: u32,
+    pub StartingY: u32,
+    pub CountX: u32,
+    pub CountY: u32,
+    pub CountCharsX: u32,
+    pub CountCharsY: u32,
+    pub FillAttribute: u32,
+
+    pub WindowFlags: u32,
+    pub ShowWindowFlags: u32,
+    pub WindowTitle: UNICODE_STRING,
+    pub DesktopInfo: UNICODE_STRING,
+    pub ShellInfo: UNICODE_STRING,
+    pub RuntimeData: UNICODE_STRING,
+    pub CurrentDirectories: [RTL_DRIVE_LETTER_CURDIR; RTL_MAX_DRIVE_LETTERS],
+
+    pub EnvironmentSize: usize,
+    pub EnvironmentVersion: usize,
+
+    pub PackageDependencyData: *mut c_void,
+    pub ProcessGroupId: u32,
+    pub LoaderThreads: u32,
+    pub RedirectDllName: UNICODE_STRING,
+    pub HeapPartitionName: UNICODE_STRING,
+    pub DefaultThreadpoolCpuSetMasks: *mut u64,
+    pub DefaultThreadpoolCpuSetMaskCount: u32,
+    pub DefaultThreadpoolThreadMaximum: u32,
+    pub HeapMemoryTypeMask: u32,
+}

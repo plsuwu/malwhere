@@ -1,3 +1,6 @@
+use alloc::borrow::ToOwned;
+use alloc::string::String;
+use alloc::vec::Vec;
 use windows::core::{PCSTR, PCWSTR};
 
 pub trait HashFunction {

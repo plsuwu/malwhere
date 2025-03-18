@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.96"
+anyhow = {  version = "1.0.96", default-features = false }
 common = { path = "../common" }
+libc-print = "0.1.23"
 
 [dependencies.windows]
 version = "0.60.0"
@@ -17,3 +18,11 @@ features = [
     "Win32_System_Diagnostics_Debug",
     "Win32_System_Memory",
 ]
+
+[profile.release]
+opt-level = "z"
+debug = false
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"

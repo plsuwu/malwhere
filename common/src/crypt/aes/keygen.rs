@@ -1,8 +1,10 @@
 use crate::crypt::aes::ks::{cbc_decrypt, cbc_encrypt, AesKey128};
-use anyhow::anyhow;
-use rand::{Fill, Rng};
-use std::io::Read;
-use std::ops::AddAssign;
+use alloc::vec::Vec;
+use anyhow::Result;
+use core::mem::transmute;
+use core::ops::AddAssign;
+use rand::rngs::SmallRng;
+use rand::{Rng, SeedableRng};
 
 /// ```ignore
 /// VOID GenerateProtectedKey(
@@ -45,25 +47,29 @@ use std::ops::AddAssign;
 ///     free(pKey);
 /// }
 /// ```
-
 pub trait ProtectedKey<const N: usize> {
-    fn new() -> anyhow::Result<Self>
+    fn new() -> Result<Self>
     where
         Self: Sized;
 
-    fn key_from(hint: u8, key: Vec<u8>) -> anyhow::Result<Self>
+    fn key_from(hint: u8, key: Vec<u8>) -> Result<Self>
     where
         Self: Sized;
 
-    fn gen_pkey() -> anyhow::Result<[u8; N]> {
+    fn gen_pkey() -> Result<[u8; N]> {
         let mut key = [0u8; N];
-        rand::fill(&mut key[..]);
+        let mut rng = SmallRng::from_os_rng();
+
+        for i in 0..N {
+            key[i] = rng.random::<u8>();
+        }
 
         Ok(key)
     }
 
     fn gen_subkey() -> u8 {
-        rand::random::<u8>() + 0x01
+        let mut rng = SmallRng::from_os_rng();
+        rng.random::<u8>() + 0x01
     }
 
     fn xor_key(&mut self, rhs: u8);
@@ -79,8 +85,8 @@ pub struct AesProtectedKey<const N: usize> {
 }
 
 impl<const N: usize> ProtectedKey<N> for AesProtectedKey<N> {
-    fn new() -> anyhow::Result<Self> {
-        let mut key = Self::gen_pkey()?;
+    fn new() -> Result<Self> {
+        let key = Self::gen_pkey()?;
         let hint = key[0];
         let subkey = Self::gen_subkey();
 
@@ -94,7 +100,7 @@ impl<const N: usize> ProtectedKey<N> for AesProtectedKey<N> {
         Ok(obj)
     }
 
-    fn key_from(hint: u8, key: Vec<u8>) -> anyhow::Result<Self> {
+    fn key_from(hint: u8, key: Vec<u8>) -> Result<Self> {
         Ok(Self { hint, key })
     }
 
@@ -112,7 +118,7 @@ impl<const N: usize> ProtectedKey<N> for AesProtectedKey<N> {
         let mut real_key: [u8; 16] = [0; 16];
         real_key[..16].copy_from_slice(self.key.as_slice());
 
-        let aes_key: AesKey128 = unsafe { std::mem::transmute(real_key) };
+        let aes_key: AesKey128 = unsafe { transmute(real_key) };
 
         cbc_encrypt(data, &aes_key)
     }
@@ -121,11 +127,11 @@ impl<const N: usize> ProtectedKey<N> for AesProtectedKey<N> {
         let mut real_key: [u8; 16] = [0; 16];
         real_key[..16].copy_from_slice(self.key.as_slice());
 
-        let aes_key: AesKey128 = unsafe { std::mem::transmute(real_key) };
+        let aes_key: AesKey128 = unsafe { transmute(real_key) };
 
         let res = cbc_decrypt(data, aes_key);
         if let Some(r) = res {
-            return r
+            r
         } else {
             panic!("decrypt failed");
         }
@@ -136,8 +142,8 @@ impl<const N: usize> ProtectedKey<N> for AesProtectedKey<N> {
 impl<const N: usize> AesProtectedKey<N> {
     pub fn brute(&mut self) -> Vec<u8> {
         let mut rhs = 0u8;
-        while self.reverse_xor(rhs)[0] != self.hint &&
-            rhs <= 0xff
+        while self.reverse_xor(rhs)[0] != self.hint
+            // && rhs <= 0xff
         {
             rhs.add_assign(1);
         }

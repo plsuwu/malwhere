@@ -1,8 +1,13 @@
 //! Remote thread enumeration tooling
 
 use super::process::Processes;
+use anyhow::Result;
+use anyhow::anyhow;
 use crate::remote::types::SYSTEM_THREAD_INFORMATION;
+use alloc::string::{String, ToString};
+use libc_print::std_name::println;
 use windows::Win32::Foundation::*;
+
 #[repr(C, align(16))]
 #[derive(Debug, Copy, Clone)]
 pub struct Thread {
@@ -21,8 +26,8 @@ impl Thread {
     /// While the types referenced in `SYSTEM_PROCESS_INFORMATION.UniqueProcessId` and
     /// `SYSTEM_THREAD_INFORMATION.ClientId.UniqueThread` are `HANDLE` types, these are actually
     /// referencing the respective `PID`/`TID` as opposed to a true `HANDLE` type.
-    pub fn get_threads(target: &str) -> anyhow::Result<Self> {
-        let process_vec = Processes::get();
+    pub fn get_threads(target: &str) -> Result<Self> {
+        let process_vec = Processes::get_all();
         for process in process_vec {
             // avoid trying to read `ImageName.Buffer` if the process name is null
             if process.ImageName.Length != 0x00 {
@@ -35,8 +40,8 @@ impl Thread {
                 }
             }
         }
-
-        Err(anyhow::anyhow!("[x] No process '{}'.", target))
+        
+        Err(anyhow!("No process '{}' found", target))?
     }
 
     /// Prints some details about a target process's threads to `stdout`:
@@ -47,8 +52,8 @@ impl Thread {
     /// * State
     ///
     /// Function may panic if a thread's `SYSTEM_THREAD_INFORMATION` struct cannot be dereferenced.
-    pub fn list_remote_threads(target_process: &str) -> anyhow::Result<()> {
-        let process_vec = Processes::get();
+    pub fn list_remote_threads(target_process: &str) -> Result<()> {
+        let process_vec = Processes::get_all();
 
         for process in process_vec {
             let name: String;
@@ -63,8 +68,7 @@ impl Thread {
                 continue;
             }
 
-            let threads_head_ptr =
-                (&process.Threads) as *const _ as *mut SYSTEM_THREAD_INFORMATION;
+            let threads_head_ptr = (&process.Threads) as *const _ as *mut SYSTEM_THREAD_INFORMATION;
             println!(
                 "\n[+] Found target '{}' -> enumerating {} threads:",
                 name, process.NumberOfThreads

@@ -6,13 +6,18 @@
 //! TODO:
 //!     needs refactoring out to split between syscall vs. module retrieval
 
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 use crate::environment_block::read_gs::GetBlock;
 use crate::environment_block::types::{
     LDR_DATA_TABLE_ENTRY, PEB_LDR_DATA, PROCESS_ENVIRONMENT_BLOCK,
 };
 use lazy_static::lazy_static;
-use rand::random_range;
-use std::ffi::{c_void, CStr};
+use rand::{Rng, SeedableRng};
+use rand::rngs::SmallRng;
+use core::ffi::{c_void, CStr};
+use anyhow::anyhow;
+use anyhow::Result;
 use windows::Win32::System::Diagnostics::Debug::IMAGE_NT_HEADERS64;
 use windows::Win32::System::SystemServices::{
     IMAGE_DOS_HEADER, IMAGE_DOS_SIGNATURE, IMAGE_EXPORT_DIRECTORY, IMAGE_NT_SIGNATURE,
@@ -96,8 +101,7 @@ unsafe impl Send for PROCESS_ENVIRONMENT_BLOCK {}
 /// // (this occasionally varies from version to version)
 /// assert_eq!(name_str, "NtAllocateVirtualMemoryEx");
 /// ```
-#[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct ModuleExports {
     pub names_count: u32,
     pub funcs_count: u32,
@@ -109,11 +113,12 @@ pub struct ModuleExports {
     pub syscall_index_bounds: Option<(isize, isize)>,
 }
 
+
 impl ModuleExports {
     pub fn new(
         module_base: *mut c_void,
         export_addr: *mut IMAGE_EXPORT_DIRECTORY,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self> {
         // these two counts usually only differ slightly (some functions do not have
         // exported names)
         let names_count = unsafe { (*export_addr).NumberOfNames };
@@ -146,7 +151,7 @@ impl ModuleExports {
         })
     }
 
-    pub fn read_name(&self, index: isize) -> anyhow::Result<String> {
+    pub fn read_name(&self, index: isize) -> Result<String> {
         let rva = unsafe { *self.names_array.offset(index) };
         let name = unsafe {
             CStr::from_ptr(self.module_base.byte_offset(rva as isize) as *mut i8).to_str()?
@@ -155,7 +160,7 @@ impl ModuleExports {
         Ok(name.to_string())
     }
 
-    pub fn get_function(&self, index: isize) -> anyhow::Result<*mut c_void> {
+    pub fn get_function(&self, index: isize) -> Result<*mut c_void> {
         let ord_index = unsafe { *self.ordls_array.offset(index) };
         let fn_rva = unsafe { *self.addrs_array.offset(ord_index as isize) };
         let fn_address = unsafe { self.module_base.byte_add(fn_rva as usize) };
@@ -165,7 +170,7 @@ impl ModuleExports {
 
     // this would be more efficient as a binary search but it just gets
     // increasingly complex
-    pub fn syscall_subset(&mut self) -> anyhow::Result<()> {
+    pub fn syscall_subset(&mut self) -> Result<()> {
         let mut lower: isize = -1;
         let mut upper: isize = -1;
         for i in 0..self.names_count as isize {
@@ -196,14 +201,15 @@ impl ModuleExports {
         )
     }
 
-    pub fn get_random(&mut self, _addr: *const c_void) -> anyhow::Result<*mut c_void> {
+    pub fn get_random(&mut self, _addr: *const c_void) -> Result<*mut c_void> {
         if self.syscall_index_bounds.is_none() {
             self.syscall_subset()?;
         }
         let rand_index = {
+            let mut rng = SmallRng::from_os_rng();
             let range_size =
                 self.syscall_index_bounds.unwrap().1 - self.syscall_index_bounds.unwrap().0;
-            let index_offset = random_range(0..range_size as usize);
+            let index_offset = rng.random_range(0..range_size as usize);
             self.syscall_index_bounds.unwrap().0 as usize + index_offset
         };
 
@@ -226,13 +232,7 @@ impl ModuleExports {
         }
 
         let name = self.read_name(rand_index as isize)?;
-        Err(anyhow::anyhow!(
-            "[x] Could not find syscall for '{:?}' near 0xff + syscall_address: '{:?}'.",
-            name,
-            addr
-        ))
-        //     name
-        // ))
+        Err(anyhow!("Unable to find random syscall near {} (at {})", name, rand_index))
     }
 
     pub fn get_ssn(&self, address: *mut c_void) -> u32 {
@@ -243,7 +243,7 @@ impl ModuleExports {
     }
 
     // TODO: implement testing for this with patched hooking
-    pub fn check_neighbor(&self, address: *mut c_void) -> anyhow::Result<u32> {
+    pub fn check_neighbor(&self, address: *mut c_void) -> Result<u32> {
         let directions = &[DOWN, UP];
         for &dir in directions {
             for idx in 1..0xff {
@@ -254,9 +254,7 @@ impl ModuleExports {
             }
         }
 
-        Err(anyhow::anyhow!(
-            "[x] Unable to validate function opcodes in neighboring bytes."
-        ))
+        Err(anyhow!("Unable to verify neighboring syscall opcode"))
     }
 
     pub fn match_bytes(&self, address: *mut c_void) -> Option<u32> {
@@ -279,7 +277,7 @@ impl ModuleExports {
         None
     }
 
-    pub fn verify_bytes(&self, address: *mut c_void) -> anyhow::Result<u32> {
+    pub fn verify_bytes(&self, address: *mut c_void) -> Result<u32> {
         if let Some(ssn) = self.match_bytes(address) {
             return Ok(ssn);
         }
@@ -291,12 +289,12 @@ impl ModuleExports {
             }
         }
 
-        Err(anyhow::anyhow!("[x] Couldn't validate SSN."))
+        Err(anyhow!("Unable to verify opcode bytes"))
     }
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Module {
     pub module_name: String,
     pub module_base: *mut c_void,
@@ -306,15 +304,11 @@ pub struct Module {
 impl Module {
     /// Retrieve base address of `ntdll.dll` via its offset from `ProcessEnvironmentBlock`
     /// `LoaderData` field
-    pub fn ntdll() -> anyhow::Result<Self> {
+    pub fn ntdll() -> Result<Self> {
         // bail if Windows version < 10
         // (note "Windows 10" also refers to Windows 11 here)
         if GLOBAL_PEB.OSMajorVersion != 0xA {
-            Err(anyhow::anyhow!(
-                "[x] Windows version '{}' invalid (expected '{}').",
-                GLOBAL_PEB.OSMajorVersion,
-                0xA,
-            ))?
+            Err(anyhow!("Invalid OS version (got {}; expected {})", GLOBAL_PEB.OSMajorVersion, 0xA))?
         }
 
         // resolve `LIST_ENTRY` for `ntdll.dll` using an offset and retrieve module's
@@ -343,10 +337,11 @@ impl Module {
     /// Resolves the address of the module's `IMAGE_EXPORT_DIRECTORY` using the
     /// `IMAGE_NT_HEADERS.OptionalHeader.DataDirectory[0]` RVA to offset the module's base
     /// address
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn get_exports(
         module_base: *mut c_void,
         nt_headers: *mut IMAGE_NT_HEADERS64,
-    ) -> anyhow::Result<*mut IMAGE_EXPORT_DIRECTORY> {
+    ) -> Result<*mut IMAGE_EXPORT_DIRECTORY> {
         unsafe {
             let rva = (*nt_headers).OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT]
                 .VirtualAddress;
@@ -360,27 +355,23 @@ impl Module {
     ///
     /// Also verifies DOS + NT header signatures to confirm we are where we expect to
     /// be in the module
-    fn get_headers(module_base: *mut c_void) -> anyhow::Result<*mut IMAGE_NT_HEADERS64> {
+    fn get_headers(module_base: *mut c_void) -> Result<*mut IMAGE_NT_HEADERS64> {
         // verify dos header ('MZ')
         let dos_header = module_base as *mut IMAGE_DOS_HEADER;
         if (unsafe { *dos_header }).e_magic != IMAGE_DOS_SIGNATURE {
-            Err(anyhow::anyhow!(
-                "[x] IMAGE_DOS_SIGNATURE '{:?}' invalid (expected {:?}).",
-                unsafe { *dos_header }.e_magic,
-                IMAGE_DOS_SIGNATURE,
-            ))?
+            Err(anyhow!("Invalid signature in DOS header (got {}; expected {})", unsafe { (*dos_header).e_magic }, IMAGE_DOS_SIGNATURE))?
         }
 
         // verify nt headers ('PE\0\0')
         let nt_headers = unsafe {
             module_base.byte_offset((*dos_header).e_lfanew as isize) as *mut IMAGE_NT_HEADERS64
         };
-        if (unsafe { (*nt_headers).Signature } != IMAGE_NT_SIGNATURE) {
-            Err(anyhow::anyhow!(
-                "[x] IMAGE_NT_SIGNATURE '{:?}' invalid (expected {:?}).",
-                unsafe { (*nt_headers).Signature },
-                IMAGE_NT_SIGNATURE,
-            ))?
+        if unsafe { (*nt_headers).Signature } != IMAGE_NT_SIGNATURE {
+            Err(anyhow!(
+                "Invalid signature in NT headers (got {}; expected {})",
+                    unsafe { (*nt_headers).Signature },
+                    IMAGE_NT_SIGNATURE,
+                ))?
         }
 
         Ok(nt_headers)

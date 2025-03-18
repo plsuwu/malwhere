@@ -1,3 +1,3 @@
 pub mod thread;
-mod types;
+pub mod types;
 pub mod process;

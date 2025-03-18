@@ -1,5 +1,10 @@
-use rand::{rng, Rng};
+use alloc::borrow::ToOwned;
+use alloc::vec::Vec;
+use rand::{Rng, SeedableRng};
+use rand::rngs::SmallRng;
 use super::table::*;
+use core::mem::transmute;
+use libc_print::{libc_print, libc_println};
 
 pub type AesColumn = [u8; 4];
 pub type AesBlock = [AesColumn; 4];
@@ -48,7 +53,7 @@ pub fn gf_word_add(a: AesColumn, b: AesColumn, dest: &mut AesColumn) {
 pub fn key_schedule_128(key: &AesKey128, keys_out: &mut [AesBlock; NUM_ROUND_KEYS_128]) {
     // `AesBlock` and `AesKey128` are both 16-byte structures
     // [[u8; 4]; 4] -> [u8; 16]
-    let key_block: &AesBlock = unsafe { std::mem::transmute(key) };
+    let key_block: &AesBlock = unsafe { transmute(key) };
     keys_out[0] = *key_block;
 
     let mut col_c = keys_out[0][3];
@@ -256,9 +261,9 @@ fn transmute_and_encrypt(
     key_schedule: &[AesBlock; NUM_ROUND_KEYS_128],
 ) -> [u8; 16] {
     unsafe {
-        let mut block: AesBlock = std::mem::transmute(state.to_owned());
+        let mut block: AesBlock = transmute(state.to_owned());
         encrypt_block(&mut block, key_schedule);
-        let encrypted: [u8; 16] = std::mem::transmute(block);
+        let encrypted: [u8; 16] = transmute(block);
         output.extend_from_slice(&encrypted);
 
         //prev_state = encrypted;
@@ -270,13 +275,14 @@ pub fn cbc_encrypt(input: &[u8], key: &AesKey128) -> Vec<u8> {
 
     // not a cryptographically secure IV generation implementation
     let mut iv = [0u8; 16];
-    rng().fill(&mut iv[..]);
+    let mut rng = SmallRng::from_os_rng();
+    rng.fill(&mut iv[..]);
 
-    println!("\niv:");
+    libc_println!("\niv:");
     for byte in iv {
-        print!("{:02x?}", byte);
+        libc_print!("{:02x?}", byte);
     }
-    println!();
+    libc_println!();
 
     let mut prev_state = iv;
 
@@ -347,10 +353,10 @@ pub fn cbc_decrypt(input: &[u8], key: AesKey128) -> Option<Vec<u8>> {
 
         unsafe {
             let mut state: AesBlock =
-                std::mem::transmute(*<&[u8; 16]>::try_from(curr_block).unwrap());
+                transmute(*<&[u8; 16]>::try_from(curr_block).unwrap());
             decrypt_block(&mut state, &key_schedule);
 
-            let mut decrypted: [u8; 16] = std::mem::transmute(state);
+            let mut decrypted: [u8; 16] = transmute(state);
             for (curr, prev) in decrypted.iter_mut().zip(prev_state.iter()) {
                 *curr ^= prev;
             }
