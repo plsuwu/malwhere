@@ -12,14 +12,14 @@ function SetPlatformPermissions {
         "NT SERVICE\TrustedInstaller"
         "NT AUTHORITY\SYSTEM"
     )
-    
-    # creates a backup of the original rules 
+
     $acl = Get-Acl -Path $target
-    $acl > "$(Get-Location)\platform_acl_backup.txt"
+    
+    # backup the original ruleset
+    $acl.Owner, $acl.Access | Out-File -FilePath "$(Get-Location)\platform_acl_backup.txt"
 
     $replacement = "BUILTIN\Administrators"
     $owner = New-Object System.Security.Principal.NTAccount($replacement)
-
     $acl.SetAccessRuleProtection($true, $false)
 
     # remove access rule entries for the given user
@@ -49,7 +49,7 @@ function SetRegistryKVs {
 
     # backup original registry K/V pairs
     $backupName = "services_backup.reg"
-    reg export $baseDir "$(Get-Location)\$backupName"
+    REG EXPORT "HKLM\SYSTEM\CurrentControlSet\Services" "$(Get-Location)\$backupName"
 
     $key = "Start"
     $val = 4
@@ -67,6 +67,10 @@ function SetRegistryKVs {
         Set-ItemProperty -Path $path -Name $key -Value $val
     }
 }
+
+Set-Location "$env:USERPROFILE\Desktop"
+New-Item -Name "defender-backups" -ItemType Directory
+Set-Location ".\defender-backups"
 
 SetPlatformPermissions
 SetRegistryKVs
