@@ -1,9 +1,8 @@
 # malwhere
 
-assorted malware techniques and related computer menaces.   
+assorted malware techniques
 
-> payloads aren't actually malicious, they're like all msfvenom `cmd.exe /c calc.exe` shellcode or at worst the registry stager writes the msfvenom `calc.exe` shellcode to a registry key and leaves it there.
-> 
+> payloads aren't actually malicious, they're all msfvenom `cmd.exe /c calc.exe`-based payloads and at worst the registry stager writes some shellcode to a registry key and leaves it there.
 > also defender instantly shreds most of these the second you compile them on account of the aforementioned msfvenom shellcode.
 
 |directory |language |technique |
@@ -15,3 +14,5 @@ assorted malware techniques and related computer menaces.
 |[debug-detection](https://github.com/plsuwu/malwhere/tree/main/source/debug-detection) |Rust |A handful of methods to detect debuggers. |
 |[fn-stomping](https://github.com/plsuwu/malwhere/tree/main/source/fn-stomping) |Rust |Re-writes the bytes of a benign API function in the context of a local process. |
 |[stager-registry](https://github.com/plsuwu/malwhere/blob/main/source/stager-registry/src/main.rs) |Rust |Writes a payload to the Windows registry and executes it. |
+
+the [dev branch](https://github.com/plsuwu/malwhere/tree/dev) also has some implementations not mentioned here but it is woefully incomplete.
