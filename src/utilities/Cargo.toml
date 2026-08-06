@@ -4,3 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# windows-core = { git = "https://github.com/microsoft/windows-rs.git" }
+windows-link = { git = "https://github.com/microsoft/windows-rs.git" }
+
+[build-dependencies]
+windows-bindgen = { git = "https://github.com/microsoft/windows-rs.git" }
+
+# [lib]
+# crate-type = ["cdylib"]

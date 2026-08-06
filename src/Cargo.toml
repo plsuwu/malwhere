@@ -1,3 +1,23 @@
 [workspace]
 resolver = "3"
-members = ["utilities", "importer"]
+members = ["utilities", "importer", "runner"]
+
+[workspace.lints.rust]
+non_camel_case_types = "allow"
+non_upper_case_globals = "allow"
+non_snake_case = "allow"
+
+[workspace.lints.clippy]
+upper_case_acronyms = "allow"
+not_unsafe_ptr_arg_deref = "allow"
+
+[profile.dev]
+panic = "abort"
+lto = true
+
+[profile.release]
+panic = "abort"
+lto = true
+strip = true
+opt-level = "z"
+codegen-units = 1

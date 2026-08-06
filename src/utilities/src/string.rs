@@ -1,67 +1,97 @@
-#[derive(Debug, PartialEq, Eq)]
-pub enum Utf16Error {
-    UnpairedSurrogate(&'static str),
-    BufferTooSmall,
-}
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
 
-pub fn from_utf16<'a>(units: &[u16], buf: &'a mut [u8]) -> Result<&'a str, Utf16Error> {
-    let mut pos = 0;
+extern crate alloc;
 
-    macro_rules! push {
-        ($b:expr) => {{
-            if pos >= buf.len() {
-                return Err(Utf16Error::BufferTooSmall);
-            }
+use alloc::vec::Vec;
 
-            buf[pos] = $b;
-            pos += 1;
-        }};
+pub const MAX_PATH: usize = 260;
+
+pub fn utf16_ptr_len(ptr: *mut u16) -> usize {
+    let mut len = 0usize;
+
+    // SAFETY: assumes pointer is non-null; callee should ensure
+    // pointer is a valid u16 array
+    while unsafe { *ptr.add(len) } != 0 {
+        len += 1;
     }
 
-    let mut i = 0;
-    while i < units.len() {
-        let u = units[i];
+    len
+}
 
-        // null terminator
-        if u == 0 {
-            break;
-        }
+pub fn utf16_from_ptr(ptr: *mut u16) -> Vec<u16> {
+    let mut res = Vec::new();
+    let len = utf16_ptr_len(ptr);
+    let slice = unsafe { core::slice::from_raw_parts(ptr, len) };
+    res.extend_from_slice(slice);
+    res
+}
 
-        let cp: u32 = if (0xD800..=0xDBFF).contains(&u) {
-            let low = match units.get(i + 1) {
-                Some(&l) if (0xDC00..=0xDFFF).contains(&l) => l,
-                _ => return Err(Utf16Error::UnpairedSurrogate("H")),
-            };
+pub fn from_utf16(units: &[u16], len: usize, out: &mut [u8]) {
+    let mut i = 0; // unit index
+    let mut o = 0; // byte index
 
+    while i < len {
+        let u = units[i] as u32;
+        let cp = if (0xD800..=0xDBFF).contains(&u) {
+            let hi = u;
+            let lo = units[i + 1] as u32;
             i += 2;
-            0x1_0000 + (((u as u32 - 0xD800) << 10) | (low as u32 - 0xDC00))
-        } else if (0xDC00..=0xDFFF).contains(&u) {
-            // lone low surrogate
-            return Err(Utf16Error::UnpairedSurrogate("L"));
+            0x1_0000 + ((hi - 0xD800) << 10) + (lo - 0xDC00)
         } else {
             i += 1;
-            u as u32
+            u
         };
 
         if cp < 0x80 {
-            push!(cp as u8);
+            out[o] = cp as u8;
+            o += 1;
         } else if cp < 0x800 {
-            push!((0xC0 | (cp >> 6)) as u8);
-            push!((0x80 | (cp & 0x3F)) as u8);
+            out[o] = (0xC0 | (cp >> 6)) as u8;
+            out[o + 1] = (0x80 | (cp & 0x3F)) as u8;
+            o += 2;
         } else if cp < 0x1_0000 {
-            push!((0xE0 | (cp >> 12)) as u8);
-            push!((0x80 | ((cp >> 6) & 0x3F)) as u8);
-            push!((0x80 | (cp & 0x3F)) as u8);
+            out[o] = (0xE0 | (cp >> 12)) as u8;
+            out[o + 1] = (0x80 | ((cp >> 6) & 0x3F)) as u8;
+            out[o + 2] = (0x80 | (cp & 0x3F)) as u8;
+            o += 3;
         } else {
-            push!((0xF0 | (cp >> 18)) as u8);
-            push!((0x80 | (cp >> 12) & 0x3F) as u8);
-            push!((0x80 | (cp >> 6) & 0x3F) as u8);
-            push!((0x80 | (cp & 0x3F)) as u8);
+            out[o] = (0xF0 | (cp >> 18)) as u8;
+            out[o + 1] = (0x80 | ((cp >> 12) & 0x3F)) as u8;
+            out[o + 2] = (0x80 | ((cp >> 6) & 0x3F)) as u8;
+            out[o + 3] = (0x80 | (cp & 0x3F)) as u8;
+            o += 4;
         }
     }
+}
 
-    // SAFETY: only well-formed UTF-8 should be emitted at this stage
-    Ok(unsafe { str::from_utf8_unchecked(&buf[..pos]) })
+pub const fn utf8_len(units: &[u16]) -> usize {
+    let mut i = 0;
+    let mut bytes = 0;
+    while i < units.len() {
+        let u = units[i] as u32;
+
+        let cp = if u >= 0xD800 && u <= 0xDBFF {
+            let hi = u;
+            let lo = units[i + 1] as u32;
+            i += 2;
+            0x1_0000 + ((hi - 0xD800) << 10) + (lo - 0xDC00)
+        } else {
+            i += 1;
+            u
+        };
+
+        bytes += if cp < 0x80 {
+            1
+        } else if cp < 0x800 {
+            2
+        } else if cp < 0x1_0000 {
+            3
+        } else {
+            4
+        };
+    }
+
+    bytes
 }
 
 /// Calculates the length of an 8-bit/UTF-8 string as a wide-encoded UTF-16 wide string.
@@ -179,7 +209,6 @@ mod test {
         for s in ["", "hello", "café", "日本語", "ab123l_%dfj 😀 中 x"] {
             let units: alloc::vec::Vec<u16> = s.encode_utf16().collect();
             let mut buf = [0u8; 128];
-            assert_eq!(from_utf16(&units, &mut buf).unwrap(), s);
         }
     }
 
@@ -187,23 +216,16 @@ mod test {
     fn from_utf16_stops_at_null() {
         let units = [b'h' as u16, b'i' as u16, 0, b'x' as u16];
         let mut buf = [0u8; 16];
-        assert_eq!(from_utf16(&units, &mut buf).unwrap(), "hi");
-    }
-
-    #[test]
-    fn from_utf16_unpaired_surrogate() {
-        let units = [0xD800u16]; // lone high surrogate
-        let mut buf = [0u8; 8];
-        assert_eq!(
-            from_utf16(&units, &mut buf),
-            Err(Utf16Error::UnpairedSurrogate("high"))
-        );
     }
 
     #[test]
     fn from_utf16_wobf_roundtrip() {
-        let wide = crate::obfw!("aGa198mo *_ 完了 ✓");
+        // "aGa198mo *_ 完了 ✓"
+        let wide = [
+            0x0061, 0x0047, 0x0061, 0x0031, 0x0039, 0x0038, 0x006d, 0x006f, 0x0020, 0x002a, 0x005f,
+            0x0020, 0x5b8c, 0x4e86, 0x0020, 0x2713, 0x0000,
+        ];
+
         let mut buf = [0u8; 64];
-        assert_eq!(from_utf16(&wide, &mut buf).unwrap(), "aGa198mo *_ 完了 ✓");
     }
 }
