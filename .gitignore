@@ -1,2 +1,8 @@
 target
 Cargo.lock
+
+build/
+.direnv/
+.cache/
+
+compile_commands.json
