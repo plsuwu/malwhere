@@ -5,7 +5,7 @@ OUT_DIR = ./build
 SRC_DIR = ./src
 INC_DIR = ./include
 
-TARGET = $(OUT_DIR)/watcher
+TARGET = $(OUT_DIR)/main
 
 SOURCES = $(wildcard $(SRC_DIR)/*.c)
 OBJECTS = $(patsubst $(SRC_DIR)/%.c,$(OUT_DIR)/%.o,$(SOURCES))
