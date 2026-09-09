@@ -1,0 +1,11 @@
+[package]
+name = "utilities"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["dylib"]
+
+[dependencies]
+libc = { version = "0.2.189", default-features = false }
+

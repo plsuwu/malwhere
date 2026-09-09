@@ -1,0 +1,14 @@
+[workspace]
+resolver = "3"
+members = ["utilities"]
+
+# [profile.dev]
+# panic = "abort"
+# lto = true
+
+[profile.release]
+panic = "abort"
+lto = true
+strip = true
+opt-level = "z"
+codegen-units = 1

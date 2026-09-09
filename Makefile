@@ -2,7 +2,7 @@ CC = clang
 CFLAGS = -Wall -Wextra -I$(INC_DIR)
 
 OUT_DIR = ./build
-SRC_DIR = ./src
+SRC_DIR = ./c-src
 INC_DIR = ./include
 
 TARGET = $(OUT_DIR)/main
