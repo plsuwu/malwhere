@@ -28,8 +28,19 @@
           overlays = [ (import rust-overlay) ];
         };
 
-        craneLib = crane.mkLib pkgs;
+        # craneLib = crane.mkLib pkgs;
+        rustToolchainFor =
+          p:
+          p.rust-bin.selectLatestNightlyWith (
+            toolchain:
+            toolchain.default.override {
+              extensions = [ "rust-src" ];
+              targets = [ "x86_64-unknown-linux-gnu" ];
+            }
+          );
 
+        # rustToolchain = rustToolchainFor pkgs;
+        craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchainFor;
       in
       {
         devShells.default = craneLib.devShell {

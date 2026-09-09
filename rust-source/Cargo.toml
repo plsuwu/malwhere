@@ -1,13 +1,15 @@
+cargo-features = ["panic-immediate-abort"]
+
 [workspace]
 resolver = "3"
-members = ["utilities"]
+members = ["utilities", "runner"]
 
-# [profile.dev]
-# panic = "abort"
-# lto = true
+[profile.dev]
+panic = "immediate-abort"
+lto = true
 
 [profile.release]
-panic = "abort"
+panic = "immediate-abort"
 lto = true
 strip = true
 opt-level = "z"

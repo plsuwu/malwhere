@@ -1,10 +1,11 @@
 [package]
-name = "utilities"
+name = "runner"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 libc = { version = "0.2.189", default-features = false }
+utilities = { path = "../utilities" }
 
 [profile.dev]
 panic = "immediate-abort"

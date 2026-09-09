@@ -1,4 +1,3 @@
-#![cfg_attr(not(test), no_std)]
-#![allow(clippy::missing_safety_doc)]
+#![no_std]
 
-mod alloc;
+pub mod heap;

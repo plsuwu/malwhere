@@ -8,8 +8,8 @@ const DEFAULT_PAGE_SIZE: usize = 4096;
 static PAGE_SIZE: AtomicUsize = AtomicUsize::new(0);
 
 /// `GlobalAlloc` via Linux `mmap`/`munmap`/`mremap` syscalls
-#[cfg_attr(not(test), global_allocator)]
-static ALLOCATOR: LinuxHeap = LinuxHeap(Libc);
+#[global_allocator]
+pub static ALLOCATOR: LinuxHeap = LinuxHeap(Libc);
 
 /// Determine and cache system page size via `sysconf` call, using
 /// `DEFAULT_PAGE_SIZE` as a default fallback value if this call fails
@@ -182,7 +182,13 @@ unsafe impl<M: Mapper> GlobalAlloc for LinuxHeap<M> {
 /// > NOTE: Mock system memory allocator implements `Mapper` after the tests.
 #[cfg(test)]
 mod test {
+    extern crate std;
+
     use super::*;
+    use std::boxed::Box;
+    use std::string::String;
+    use std::vec::Vec;
+
     use core::alloc::GlobalAlloc;
     use std::alloc::Layout;
     use std::collections::BTreeMap;
@@ -290,9 +296,15 @@ mod test {
             v.push(i);
         }
         assert_eq!(v.iter().sum::<u64>(), 4_999_950_000);
+        let mut s: String = String::new();
+        for c in ["f", "o", "o", " ", "b", "a", "r", " ", "b", "a", "z"] {
+            s.push_str(c);
+        }
+        assert_eq!(&s, "foo bar baz");
+        let b: Vec<Box<[u8; 4096]>> = (0..64).map(|_| Box::new([7u8; 4096])).collect();
+        assert!(b.iter().all(|x| x[4095] == 7));
     }
 
-    // #[derive(Default)]
     struct Fake {
         live: Mutex<BTreeMap<usize, usize>>,
         backing: Mutex<Vec<(usize, Layout)>>,
