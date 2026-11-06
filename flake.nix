@@ -33,7 +33,7 @@
         packages = [
           mingwCC
           rust
-          pkgs.wineWowPackages.stable
+          pkgs.wineWow64Packages.stable
           pkgs.cmake
           pkgs.meson
           pkgs.ninja
@@ -42,9 +42,11 @@
         CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER = "${mingwCC}/bin/x86_64-w64-mingw32-gcc";
         CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER = "wine";
         CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS = "-L native=${mingw.windows.pthreads}/lib";
+
+        WINEDEBUG = "-all";
         shellHook = ''
-          export WINEPREFIX="$PWD/.wine"
-          export WINEDEBUG=-all
+          # export WINEPREFIX="$PWD/.wine"
+          export WINEPREFIX="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.wine"
         '';
       };
     };

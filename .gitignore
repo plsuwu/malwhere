@@ -1,3 +1,5 @@
+.direnv/
+.wine/
+
 target
 Cargo.lock
-.direnv/
