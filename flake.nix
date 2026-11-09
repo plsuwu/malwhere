@@ -20,7 +20,6 @@
         overlays = [ rust-overlay.overlays.default ];
       };
 
-      # `MinGW-w64` -> `x86_64-w64-mingw32-gcc/g++`/`windows.h`/import libs
       mingw = pkgs.pkgsCross.mingwW64;
       mingwCC = mingw.stdenv.cc;
 
@@ -34,9 +33,6 @@
           mingwCC
           rust
           pkgs.wineWow64Packages.stable
-          pkgs.cmake
-          pkgs.meson
-          pkgs.ninja
         ];
 
         CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER = "${mingwCC}/bin/x86_64-w64-mingw32-gcc";
