@@ -1,8 +1,34 @@
+use std::ptr;
+
 use common::winapi::{CloseHandle, GetStdHandle, SetStdHandle};
 use common::winapi::{CreatePipe, ReadFile};
 use common::winapi::{HANDLE, STD_OUTPUT_HANDLE};
 
-use std::ptr;
+/// Helper: reads captured data back from a `HANDLE` into a `Vec`.
+///
+/// Assumes `HANDLE` will yield valid UTF-8 when read back with `ReadFile`.
+fn read_to_end(h: HANDLE) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut buf = [0u8; 4096];
+    loop {
+        let mut n = 0;
+        let ok = unsafe {
+            ReadFile(
+                h,
+                buf.as_mut_ptr().cast(),
+                buf.len() as u32,
+                &mut n,
+                ptr::null_mut(),
+            )
+        };
+        if ok == 0 || n == 0 {
+            break;
+        }
+        out.extend_from_slice(&buf[..n as usize]);
+    }
+    unsafe { CloseHandle(h) };
+    out
+}
 
 /// Wrapper to print the result of an assertion to stdout as part of test runner to indicate when
 /// tests were actually run and were successful (despite the test runner indicating otherwise).
@@ -25,33 +51,12 @@ fn capture(which: u32, f: impl FnOnce()) -> Vec<u8> {
         SetStdHandle(which, original);
         CloseHandle(w);
 
-        let mut out = Vec::new();
-        let mut buf = [0u8; 4096];
-        loop {
-            let mut n = 0;
-            let ok = ReadFile(
-                r,
-                buf.as_mut_ptr() as _,
-                buf.len() as u32,
-                &mut n,
-                ptr::null_mut(),
-            );
-
-            if ok == 0 || n == 0 {
-                break;
-            }
-            out.extend_from_slice(&buf[..n as usize]);
-        }
-        CloseHandle(r);
-        out
+        read_to_end(r)
     }
 }
 
 fn main() {
-    //
     // assertions
-    //
-
     check(
         "print_macro",
         capture(STD_OUTPUT_HANDLE, || common::print!("a{}c", 'b')),
