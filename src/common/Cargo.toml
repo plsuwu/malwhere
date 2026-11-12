@@ -4,7 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+bitflags = "2.13.2"
 
+[build-dependencies]
+windows-bindgen = { git = "https://github.com/microsoft/windows-rs.git" }
+
+[lib]
+doctest = false
 
 # the capture pipe + `cargo test` harness makes these tests flaky if not run on a single thread 
 # (`cargo test -- --test-threads=1`), this achieves effectively the same thing but isolates to 
@@ -12,5 +18,4 @@ edition = "2024"
 [[test]]
 name = "console_stdio"
 harness = false
-
 
