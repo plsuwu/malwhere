@@ -99,6 +99,29 @@ macro_rules! println {
     };
 }
 
+#[macro_export]
+macro_rules! eprint {
+    ($($arg:tt)*) => {
+        $crate::console::Console::eprint(::core::format_args!($($arg)*))
+    };
+}
+
+#[macro_export]
+macro_rules! eprintln {
+    () => {
+        $crate::console::Console::eprint(::core::format_args!("\n"))
+    };
+
+    ($($arg:tt)*) => {
+        $crate::console::Console::eprint(
+            ::core::format_args!(
+                "{}\n",
+                ::core::format_args!($($arg)*)
+            )
+        )
+    };
+}
+
 #[cfg(test)]
 mod test {
     #![allow(dead_code, unused_imports)]
@@ -234,7 +257,7 @@ mod test {
     }
 
     #[test]
-    fn invalid_sink_bytes_rejects() {
+    fn invalid_sink_bytes_are_rejects() {
         struct LiesMalicious;
         impl RawSink for LiesMalicious {
             fn write_raw(&mut self, buf: &[u8]) -> Option<usize> {

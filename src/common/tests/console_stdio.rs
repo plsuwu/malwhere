@@ -2,7 +2,7 @@ use std::ptr;
 
 use common::winapi::{CloseHandle, GetStdHandle, SetStdHandle};
 use common::winapi::{CreatePipe, ReadFile};
-use common::winapi::{HANDLE, STD_OUTPUT_HANDLE};
+use common::winapi::{HANDLE, STD_ERROR_HANDLE, STD_OUTPUT_HANDLE};
 
 /// Helper: reads captured data back from a `HANDLE` into a `Vec`.
 ///
@@ -30,13 +30,6 @@ fn read_to_end(h: HANDLE) -> Vec<u8> {
     out
 }
 
-/// Wrapper to print the result of an assertion to stdout as part of test runner to indicate when
-/// tests were actually run and were successful (despite the test runner indicating otherwise).
-fn check(name: &str, got: Vec<u8>, want: &[u8]) {
-    assert_eq!(got, want, "{name}");
-    println!("(no harness): test {name} -> ok");
-}
-
 /// Capture the result of a closure `f` in an anonymous Windows pipe
 fn capture(which: u32, f: impl FnOnce()) -> Vec<u8> {
     unsafe {
@@ -55,13 +48,21 @@ fn capture(which: u32, f: impl FnOnce()) -> Vec<u8> {
     }
 }
 
+/// Wrapper to print the result of an assertion to stdout as part of test runner to indicate when
+/// tests were actually run and were successful (despite the test runner indicating otherwise).
+fn check(name: &str, got: Vec<u8>, want: &[u8]) {
+    assert_eq!(got, want, "{name}");
+    std::println!("test console_stdio::{name} ... ok");
+}
+
 fn main() {
-    // assertions
+    // assertions run sequentially under the single `main` function
     check(
         "print_macro",
         capture(STD_OUTPUT_HANDLE, || common::print!("a{}c", 'b')),
         b"abc",
     );
+
     check(
         "println_empty",
         capture(STD_OUTPUT_HANDLE, || common::println!()),
@@ -71,5 +72,23 @@ fn main() {
         "println_args",
         capture(STD_OUTPUT_HANDLE, || common::println!("x = {}", 5)),
         b"x = 5\n",
+    );
+
+    check(
+        "eprint_macro",
+        capture(STD_ERROR_HANDLE, || common::eprint!("a{}c", 'b')),
+        b"abc",
+    );
+
+    check(
+        "eprintln_empty",
+        capture(STD_ERROR_HANDLE, || common::eprintln!()),
+        b"\n",
+    );
+
+    check(
+        "eprintln_args",
+        capture(STD_ERROR_HANDLE, || common::eprintln!("x = {}", 6)),
+        b"x = 6\n",
     );
 }
