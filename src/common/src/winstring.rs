@@ -1,3 +1,31 @@
+extern crate alloc;
+use alloc::string::{FromUtf16Error, String};
+
+/// Calculates the length of a WCHAR buffer array via a `NUL` terminator. returns length of up to
+/// `MAX_PATH` (`260`).
+pub unsafe fn wptr_len(buf: *const u16) -> u16 {
+    let mut len = 0;
+    while unsafe { *buf.add(len) } != 0 && len < 260 {
+        len += 1;
+    }
+
+    len as _
+}
+
+/// Borrows the contents of a WCHAR buffer array as a UTF-16 slice.
+pub unsafe fn unicode_string_as_slice<'a>(buf: *const u16, len: u16) -> &'a [u16] {
+    if buf.is_null() {
+        return &[];
+    }
+
+    unsafe { core::slice::from_raw_parts(buf, (len / 2) as usize) }
+}
+
+/// Converts a `*const u16` to a `String`, replacing invalid UTF-16 with U+FFFD.
+pub unsafe fn from_wptr(buf: *const u16, len: u16) -> String {
+    unsafe { String::from_utf16_lossy(unicode_string_as_slice(buf, len)) }
+}
+
 pub const fn str_utf16_len(s: &str) -> usize {
     let b = s.as_bytes();
     let mut i = 0;

@@ -3,6 +3,7 @@
 use bitflags::bitflags;
 
 pub type BYTE = u8;
+pub type CHAR = i8;
 pub type WCHAR = u16;
 pub type USHORT = u16;
 pub type WORD = u16;
@@ -13,6 +14,7 @@ pub type HEAP_FLAGS = u32;
 pub type BOOL = i32;
 pub type LONG = i32;
 pub type ULONGLONG = u64;
+pub type LONGLONG = i64;
 pub type SIZE_T = usize;
 pub type ULONG_PTR = usize;
 pub type INT_PTR = isize;
@@ -22,6 +24,7 @@ pub type PVOID = *mut core::ffi::c_void;
 pub type LPVOID = *mut core::ffi::c_void;
 pub type LPCVOID = *const core::ffi::c_void;
 
+pub type PULONG = *mut ULONG;
 pub type PWSTR = *mut WCHAR;
 pub type PWCHAR = *mut WCHAR;
 pub type PWORD = *mut WORD;
@@ -30,6 +33,20 @@ pub type LPDWORD = *mut DWORD;
 pub type PHANDLE = *mut HANDLE;
 
 pub type PPS_POST_PROCESS_INIT_ROUTINE = Option<unsafe extern "system" fn()>;
+
+pub const IMAGE_DOS_SIGNATURE: USHORT = 0x5A4D;
+pub const IMAGE_NT_SIGNATURE: DWORD = 0x00004550;
+
+pub const IMAGE_DIRECTORY_ENTRY_EXPORT: WORD = 0;
+pub const IMAGE_DIRECTORY_ENTRY_IMPORT: WORD = 1;
+pub const IMAGE_DIRECTORY_ENTRY_RESOURCE: WORD = 2;
+pub const IMAGE_DIRECTORY_ENTRY_EXCEPTION: WORD = 3;
+pub const IMAGE_DIRECTORY_ENTRY_SECURITY: WORD = 4;
+pub const IMAGE_DIRECTORY_ENTRY_BASERELOC: WORD = 5;
+pub const IMAGE_DIRECTORY_ENTRY_DEBUG: WORD = 6;
+pub const IMAGE_DIRECTORY_ENTRY_GLOBALPTR: WORD = 8;
+pub const IMAGE_DIRECTORY_ENTRY_TLS: WORD = 9;
+pub const IMAGE_DIRECTORY_ENTRY_IAT: WORD = 12;
 
 pub const HEAP_ZERO_MEMORY: DWORD = 0x00000008;
 pub const MAX_PATH: u32 = 260;
@@ -40,6 +57,114 @@ pub const STD_OUTPUT_HANDLE: DWORD = (-11i32).cast_unsigned();
 pub const STD_ERROR_HANDLE: DWORD = (-12i32).cast_unsigned();
 
 pub type FARPROC = Option<unsafe extern "system" fn() -> INT_PTR>;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IMAGE_EXPORT_DIRECTORY {
+    pub Characteristics: DWORD,
+    pub TimeDateStamp: DWORD,
+    pub MajorVersion: WORD,
+    pub MinorVersion: WORD,
+    pub Name: DWORD,
+    pub Base: DWORD,
+    pub NumberOfFunctions: DWORD,
+    pub NumberOfNames: DWORD,
+    pub AddressOfFunctions: DWORD,
+    pub AddressOfNames: DWORD,
+    pub AddressOfNameOrdinals: DWORD,
+}
+
+pub type PIMAGE_EXPORT_DIRECTORY = *mut IMAGE_EXPORT_DIRECTORY;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IMAGE_DOS_HEADER {
+    pub e_magic: WORD,
+    pub e_cblp: WORD,
+    pub e_cp: WORD,
+    pub e_crlc: WORD,
+    pub e_cparhdr: WORD,
+    pub e_minalloc: WORD,
+    pub e_maxalloc: WORD,
+    pub e_ss: WORD,
+    pub e_sp: WORD,
+    pub e_csum: WORD,
+    pub e_ip: WORD,
+    pub e_cs: WORD,
+    pub e_lfarlc: WORD,
+    pub e_ovno: WORD,
+    pub e_res: [WORD; 4],
+    pub e_oemid: WORD,
+    pub e_oeminfo: WORD,
+    pub e_res2: [WORD; 10],
+    pub e_lfanew: LONG,
+}
+
+pub type PIMAGE_DOS_HEADER = *mut IMAGE_DOS_HEADER;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IMAGE_NT_HEADERS {
+    pub Signature: DWORD,
+    pub FileHeader: IMAGE_FILE_HEADER,
+    pub OptionalHeader: IMAGE_OPTIONAL_HEADER,
+}
+
+pub type PIMAGE_NT_HEADERS = *mut IMAGE_NT_HEADERS;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IMAGE_DATA_DIRECTORY {
+    pub VirtualAddress: DWORD,
+    pub Size: DWORD,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IMAGE_OPTIONAL_HEADER {
+    pub Magic: WORD,
+    pub MajorLinkerVersion: BYTE,
+    pub MinorLinkerVersion: BYTE,
+    pub SizeOfCode: DWORD,
+    pub SizeOfInitializedData: DWORD,
+    pub SizeOfUninitializedData: DWORD,
+    pub AddressOfEntryPoint: DWORD,
+    pub BaseOfCode: DWORD,
+    pub ImageBase: ULONGLONG,
+    pub SectionAlignment: DWORD,
+    pub FileAlignment: DWORD,
+    pub MajorOperatingSystemVersion: WORD,
+    pub MinorOperatingSystemVersion: WORD,
+    pub MajorImageVersion: WORD,
+    pub MinorImageVersion: WORD,
+    pub MajorSubsystemVersion: WORD,
+    pub MinorSubsystemVersion: WORD,
+    pub Win32VersionValue: DWORD,
+    pub SizeOfImage: DWORD,
+    pub SizeOfHeaders: DWORD,
+    pub CheckSum: DWORD,
+    pub Subsystem: WORD,
+    pub DllCharacteristics: WORD,
+    pub SizeOfStackReserve: ULONGLONG,
+    pub SizeOfStackCommit: ULONGLONG,
+    pub SizeOfHeapReserve: ULONGLONG,
+    pub SizeOfHeapCommit: ULONGLONG,
+    pub LoaderFlags: DWORD,
+    pub NumberOfRvaAndSizes: DWORD,
+    pub DataDirectory: [IMAGE_DATA_DIRECTORY; 16],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct IMAGE_FILE_HEADER {
+    pub Machine: WORD,
+    pub NumberOfSections: WORD,
+    pub TimeDateStamp: DWORD,
+    pub PointerToSymbolTable: DWORD,
+    pub NumberOfSymbols: DWORD,
+    pub SizeOfOptionalHeader: WORD,
+    pub Characteristics: WORD,
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -123,12 +248,21 @@ pub struct LDR_DATA_TABLE_ENTRY {
     pub TimeDateStamp: ULONG,
 }
 
+/// Constructed from [NtDoc `PEB_LDR_DATA`] documentation.
+///
+/// [NtDoc `PEB_LDR_DATA`]: https://ntdoc.m417z.com/peb_ldr_data
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct PEB_LDR_DATA {
-    pub Reserved1: [BYTE; 8],
-    pub Reserved2: [PVOID; 3],
+    pub Length: ULONG,
+    pub Initialized: BYTE,
+    pub SsHandle: HANDLE,
+    pub InLoadOrderModuleList: LIST_ENTRY,
     pub InMemoryOrderModuleList: LIST_ENTRY,
+    pub InInitializationOrderModuleList: LIST_ENTRY,
+    pub EntryInProgress: PVOID,
+    pub ShutdownInProgress: BYTE,
+    pub ShutdownThreadId: HANDLE,
 }
 
 pub type PPEB_LDR_DATA = *mut PEB_LDR_DATA;
@@ -144,77 +278,98 @@ pub struct RTL_USER_PROCESS_PARAMETERS {
 
 pub type PRTL_USER_PROCESS_PARAMETERS = *mut RTL_USER_PROCESS_PARAMETERS;
 
+/// Header of a serialized activation context data blob.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct ACTIVATION_CONTEXT_DATA {
+    pub Magic: ULONG,
+    pub HeaderSize: ULONG,
+    pub FormatVersion: ULONG,
+    pub TotalSize: ULONG,
+    /// Byte offset to `ACTIVATION_CONTEXT_DATA_TOC_HEADER` from this structure's base.
+    pub DefaultTocOffset: ULONG,
+    /// Byte offset to `ACTIVATION_CONTEXT_DATA_EXTENDED_TOC_HEADER` from this structure's base; zero if absent.
+    pub ExtendedTocOffset: ULONG,
+    /// Byte offset to `ACTIVATION_CONTEXT_DATA_ASSEMBLY_ROSTER_HEADER` from this structure's base.
+    pub AssemblyRosterOffset: ULONG,
+    /// `ACTIVATION_CONTEXT_FLAG_*` flags.
+    pub Flags: ULONG,
+}
+
+pub type PACTIVATION_CONTEXT_DATA = *mut ACTIVATION_CONTEXT_DATA;
+
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct PEB {
-    /// The process was cloned with an inherited address space.
-    ///
-    /// ```c,no_run
-    /// BYTE Reserved1[2]; /* @ idx = 0 */
-    /// ```
-    pub InheritedAddressSpace: BYTE,
-    /// The process has image file execution options (IFEO).
-    ///
-    /// ```c
-    /// BYTE Reserved1[2]; /* @ idx = 1 */
-    /// ```
-    pub ReadImageFileExecOptions: BYTE,
-    /// The process has a debugger attached.
-    pub BeingDebugged: BYTE,
-    /// Because we use `bitflags` for this bitfield union, the usage is a bit different:
-    ///
-    /// ```
-    /// // assumes we have dereferenced a valid PEB pointer
-    /// let peb: PEB = /* .. PEB retrieval logic .. */;
-    /// let is_protected = peb.BitField.contains(BIT_FIELD::IsProtectedProcess);
-    /// ```
-    pub BitField: BIT_FIELD,
-    /// Handle to a mutex for synchronization.
-    pub Mutant: HANDLE,
-    /// Pointer to the base address of the process image.
-    pub ImageBaseAddress: PVOID,
-    /// Pointer to the process loader data.
-    pub Ldr: PPEB_LDR_DATA,
-    /// Pointer to the process parameters.
-    pub ProcessParameters: PRTL_USER_PROCESS_PARAMETERS,
-    /// Reserved.
-    pub SubSystemData: PVOID,
-    /// Pointer to the process default heap.
-    ///
-    /// NOTE: Technically a `PHEAP` (i.e. pointer to a `HEAP` struct)
-    ///  * https://github.com/winsiderss/systeminformer/blob/29d2104f1634331e178f70d172239583d1c14bc8/SystemInformer/include/heapstruct.h#L126
-    pub ProcessHeap: PVOID,
-    /// Pointer to a critical section used to synchronize access to the PEB.
-    pub FastPebLock: PRTL_CRITICAL_SECTION,
-    /// Pointer to a singly linked list used by ATL.
-    pub AtlThunkSListPtr: PSLIST_HEADER,
-    /// Handle to the Image File Execution Options key.
-    pub IFEOKey: HANDLE,
-    /// Cross process flags.
-    pub CrossProcessFlags: CROSS_PROCESS_FLAGS,
-    /// User32 KERNEL_CALLBACK_TABLE (ntuser.h)
-    /// ```c
-    /// union {
-    ///     PKERNEL_CALLBACK_TABLE KernelCallbackTable;
-    ///     PVOID UserSharedInfoPtr;
-    /// };
-    /// ```
-    pub Reserved7: PVOID,
-    /// Reserved.
-    pub SystemReserved: ULONG,
-    /// Pointer to the Active Template Library (ATL) singly linked list (32-bit)
-    pub AtlThunkSListPtr32: ULONG,
-    pub Reserved9: [PVOID; 45],
-    pub Reserved10: [BYTE; 96],
-    /// Pointer to the post-process initialization routine available for use by the application.
-    pub PostProcessInitRoutine: PPS_POST_PROCESS_INIT_ROUTINE,
-    pub Reserved11: [BYTE; 128],
-    pub Reserved12: [PVOID; 1],
-    /// Session ID of the current process.
-    pub SessionId: ULONG,
+pub union PEB_0 {
+    /// Pointer to the switchback compatibility engine (Windows 7 and below).
+    pub pContextData: PVOID,
+    /// Pointer to the EC bitmap on ARM64 (Windows 11 and above).
+    pub EcCodeBitMap: PVOID,
+}
 
-    // ... additional fields after `SessionId`; see:
-    //  * https://ntdoc.m417z.com/peb#:~:text=%2F%2F%20Session%20ID%20of%20the%20current%20process
+#[repr(C)]
+pub struct RTL_BITMAP {
+    pub SizeOfBitMap: ULONG,
+    pub Buffer: PULONG,
+}
+
+pub type PRTL_BITMAP = *mut RTL_BITMAP;
+
+#[repr(C)]
+pub struct API_SET_NAMESPACE {
+    pub Version: ULONG,
+    pub Size: ULONG,
+    pub Flags: ULONG,
+    pub Count: ULONG,
+    pub EntryOffset: ULONG,
+    pub HashOffset: ULONG,
+    pub HashFactor: ULONG,
+}
+
+pub type PAPI_SET_NAMESPACE = *mut API_SET_NAMESPACE;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union LARGE_INTEGER {
+    pub Anonymous: LARGE_INTEGER_0,
+    pub u: LARGE_INTEGER_1,
+    pub QuadPart: LONGLONG,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct LARGE_INTEGER_0 {
+    pub LowPart: DWORD,
+    pub HighPart: LONG,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct LARGE_INTEGER_1 {
+    pub LowPart: DWORD,
+    pub HighPart: LONG,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union ULARGE_INTEGER {
+    pub Anonymous: ULARGE_INTEGER_0,
+    pub u: ULARGE_INTEGER_1,
+    pub QuadPart: ULONGLONG,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct ULARGE_INTEGER_0 {
+    pub LowPart: DWORD,
+    pub HighPart: DWORD,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct ULARGE_INTEGER_1 {
+    pub LowPart: DWORD,
+    pub HighPart: DWORD,
 }
 
 bitflags! {
@@ -260,6 +415,48 @@ bitflags! {
         const ProcessImagesHotPatched = 1 << 7;
         /// ReservedBits0 : 24;
         const _ = !0;
+    }
+
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct NT_GLOBAL_FLAGS: ULONG {
+        const FLG_STOP_ON_EXCEPTION           = 1 << 0;  // 0x00000001
+        const FLG_SHOW_LDR_SNAPS              = 1 << 1;  // 0x00000002
+        const FLG_DEBUG_INITIAL_COMMAND       = 1 << 2;  // 0x00000004
+        const FLG_STOP_ON_HUNG_GUI            = 1 << 3;  // 0x00000008
+        const FLG_HEAP_ENABLE_TAIL_CHECK      = 1 << 4;  // 0x00000010
+        const FLG_HEAP_ENABLE_FREE_CHECK      = 1 << 5;  // 0x00000020
+        const FLG_HEAP_VALIDATE_PARAMETERS    = 1 << 6;  // 0x00000040
+        const FLG_HEAP_VALIDATE_ALL           = 1 << 7;  // 0x00000080
+        const FLG_APPLICATION_VERIFIER        = 1 << 8;  // 0x00000100
+        const FLG_MONITOR_SILENT_PROCESS_EXIT = 1 << 9;  // 0x00000200
+        const FLG_POOL_ENABLE_TAGGING         = 1 << 10; // 0x00000400
+        const FLG_HEAP_ENABLE_TAGGING         = 1 << 11; // 0x00000800
+        const FLG_USER_STACK_TRACE_DB         = 1 << 12; // 0x00001000
+        const FLG_KERNEL_STACK_TRACE_DB       = 1 << 13; // 0x00002000
+        const FLG_MAINTAIN_OBJECT_TYPELIST    = 1 << 14; // 0x00004000
+        const FLG_HEAP_ENABLE_TAG_BY_DLL      = 1 << 15; // 0x00008000
+        const FLG_DISABLE_STACK_EXTENSION     = 1 << 16; // 0x00010000
+        const FLG_ENABLE_CSRDEBUG             = 1 << 17; // 0x00020000
+        const FLG_ENABLE_KDEBUG_SYMBOL_LOAD   = 1 << 18; // 0x00040000
+        const FLG_DISABLE_PAGE_KERNEL_STACKS  = 1 << 19; // 0x00080000
+        const FLG_ENABLE_SYSTEM_CRIT_BREAKS   = 1 << 20; // 0x00100000
+        const FLG_HEAP_DISABLE_COALESCING     = 1 << 21; // 0x00200000
+        const FLG_ENABLE_CLOSE_EXCEPTIONS     = 1 << 22; // 0x00400000
+        const FLG_ENABLE_EXCEPTION_LOGGING    = 1 << 23; // 0x00800000
+        const FLG_ENABLE_HANDLE_TYPE_TAGGING  = 1 << 24; // 0x01000000
+        const FLG_HEAP_PAGE_ALLOCS            = 1 << 25; // 0x02000000
+        const FLG_DEBUG_INITIAL_COMMAND_EX    = 1 << 26; // 0x04000000
+        const FLG_DISABLE_DBGPRINT            = 1 << 27; // 0x08000000
+        const FLG_CRITSEC_EVENT_CREATION      = 1 << 28; // 0x10000000
+        const FLG_LDR_TOP_DOWN                = 1 << 29; // 0x20000000
+        const FLG_ENABLE_HANDLE_EXCEPTIONS    = 1 << 30; // 0x40000000
+        const FLG_DISABLE_PROTDLLS            = 1 << 31; // 0x80000000
+
+        // heap flags set by the loader when a process is started under a debugger (i.e. 0x70)
+        const FLG_DEBUGGER_HEAP = Self::FLG_HEAP_ENABLE_TAIL_CHECK.bits()
+                                | Self::FLG_HEAP_ENABLE_FREE_CHECK.bits()
+                                | Self::FLG_HEAP_VALIDATE_PARAMETERS.bits();
     }
 }
 
@@ -408,3 +605,215 @@ unsafe extern "system" {
     /// Closes an open object handle.
     pub fn CloseHandle(hObject: HANDLE) -> BOOL;
 }
+
+/// Constructed from [NtDoc `PEB`] types and documentation.
+///
+/// [NtDoc `PEB`]: https://ntdoc.m417z.com/peb
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct PEB {
+    /// The process was cloned with an inherited address space.
+    pub InheritedAddressSpace: BYTE,
+    /// The process has image file execution options (IFEO).
+    pub ReadImageFileExecOptions: BYTE,
+    /// The process has a debugger attached.
+    pub BeingDebugged: BYTE,
+    pub BitField: BIT_FIELD,
+    /// Handle to a mutex for synchronization.
+    pub Mutant: HANDLE,
+    /// Pointer to the base address of the process image.
+    pub ImageBaseAddress: PVOID,
+    /// Pointer to the process loader data.
+    pub Ldr: PPEB_LDR_DATA,
+    /// Pointer to the process parameters.
+    pub ProcessParameters: PRTL_USER_PROCESS_PARAMETERS,
+    /// Reserved.
+    pub SubSystemData: PVOID,
+    /// Pointer to the process default heap (`PHEAP`)
+    pub ProcessHeap: PVOID,
+    /// Pointer to a critical section used to synchronize access to the PEB.
+    pub FastPebLock: PRTL_CRITICAL_SECTION,
+    /// Pointer to a singly linked list used by ATL.
+    pub AtlThunkSListPtr: PSLIST_HEADER,
+    /// Handle to the Image File Execution Options key.
+    pub IFEOKey: HANDLE,
+    /// Cross process flags.
+    pub CrossProcessFlags: CROSS_PROCESS_FLAGS,
+    /// User32 KERNEL_CALLBACK_TABLE (ntuser.h)
+    pub Reserved7: PVOID,
+    /// Reserved.
+    pub SystemReserved: ULONG,
+    /// Pointer to the Active Template Library (ATL) singly linked list (32-bit)
+    pub AtlThunkSListPtr32: ULONG,
+    /// Pointer to the API Set Schema.
+    pub ApiSetMap: PAPI_SET_NAMESPACE,
+    /// Counter for TLS expansion.
+    pub TlsExpansionCounter: ULONG,
+    /// Pointer to the TLS bitmap.
+    pub TlsBitmap: PRTL_BITMAP,
+    /// Bits for the TLS bitmap.
+    pub TlsBitmapBits: [ULONG; 2],
+    /// Reserved for CSRSS.
+    pub ReadOnlySharedMemoryBase: PVOID,
+    /// Pointer to the USER_SHARED_DATA for the current SILO (`PSILO_USER_SHARED_DATA`)
+    pub SharedData: PVOID,
+    /// Reserved for CSRSS.
+    pub ReadOnlyStaticServerData: *mut PVOID,
+    /// Pointer to the ANSI code page data (`PCPTABLEINFO`)
+    pub AnsiCodePageData: PVOID,
+    /// Pointer to the OEM code page data (`PCPTABLEINFO`)
+    pub OemCodePageData: PVOID,
+    /// Pointer to the Unicode case table data (`PNLSTABLEINFO`).
+    pub UnicodeCaseTableData: PVOID,
+    /// The total number of system processors.
+    pub NumberOfProcessors: ULONG,
+    /// Global flags for the system.
+    pub NtGlobalFlags: NT_GLOBAL_FLAGS,
+    /// Timeout for critical sections.
+    pub CriticalSectionTimeout: LARGE_INTEGER,
+    /// Reserved size for heap segments.
+    pub HeapSegmentReserve: SIZE_T,
+    /// Committed size for heap segments.
+    pub HeapSegmentCommit: SIZE_T,
+    /// Threshold for decommitting total free heap.
+    pub HeapDeCommitTotalFreeThreshold: SIZE_T,
+    /// Threshold for decommitting free heap blocks.
+    pub HeapDeCommitFreeBlockThreshold: SIZE_T,
+    /// Number of process heaps.
+    pub NumberOfHeaps: ULONG,
+    /// Maximum number of process heaps.
+    pub MaximumNumberOfHeaps: ULONG,
+    /// Pointer to an array of process heaps. `ProcessHeaps` is initialized to point to the first
+    /// free byte after the PEB and `MaximumNumberOfHeaps` is computed from the page size used to
+    /// hold the PEB, less the fixed size of this data structure.
+    pub ProcessHeaps: *mut PVOID,
+    /// Pointer to the system GDI shared handle table.
+    pub GdiSharedHandleTable: PVOID,
+    /// Pointer to the process starter helper.
+    pub ProcessStarterHelper: PVOID,
+    /// The maximum number of GDI function calls during batch operations (`GdiSetBatchLimit`).
+    pub GdiDCAttributeList: ULONG,
+    /// Pointer to the loader lock critical section.
+    pub LoaderLock: PRTL_CRITICAL_SECTION,
+    /// Major version of the operating system.
+    pub OSMajorVersion: ULONG,
+    /// Minor version of the operating system.
+    pub OSMinorVersion: ULONG,
+    /// Build number of the operating system.
+    pub OSBuildNumber: USHORT,
+    /// CSD version of the operating system.
+    pub OSCSDVersion: USHORT,
+    /// Platform ID of the operating system.
+    pub OSPlatformId: ULONG,
+    /// Subsystem version of the current process image (PE Headers).
+    pub ImageSubsystem: ULONG,
+    /// Major version of the current process image subsystem (PE Headers).
+    pub ImageSubsystemMajorVersion: ULONG,
+    /// Minor version of the current process image subsystem (PE Headers).
+    pub ImageSubsystemMinorVersion: ULONG,
+    /// Affinity mask for the current process.
+    pub ActiveProcessorAffinityMask: ULONG_PTR,
+    /// Temporary buffer for GDI handles accumulated in the current batch.
+    pub GdiHandleBuffer: [ULONG; 60],
+    /// Pointer to the post-process initialization routine available for use by the application.
+    pub PostProcessInitRoutine: PPS_POST_PROCESS_INIT_ROUTINE,
+    /// Pointer to the TLS expansion bitmap.
+    pub TlsExpansionBitmap: PRTL_BITMAP,
+    /// Bits for the TLS expansion bitmap (`TLS_EXPANSION_SLOTS`).
+    pub TlsExpansionBitmapBits: [ULONG; 32],
+    /// Session ID of the current process.
+    pub SessionId: ULONG,
+    /// Application compatibility flags (`KACF_*`).
+    pub AppCompatFlags: ULARGE_INTEGER,
+    /// Application compatibility flags (`KACF_*`).
+    pub AppCompatFlagsUser: ULARGE_INTEGER,
+    /// Pointer to the Application SwitchBack Compatibility Engine (`PSHIM_PROCESS_CONTEXT`).
+    pub pShimData: PVOID,
+    /// Pointer to the Application Compatibility Engine (`PAPPCOMPAT_EXE_DATA`).
+    pub AppCompatInfo: PVOID,
+    /// CSD version string of the operating system.
+    pub CSDVersion: UNICODE_STRING,
+    /// Pointer to the process activation context.
+    pub ActivationContextData: PACTIVATION_CONTEXT_DATA,
+    /// Pointer to the process assembly storage map (`PASSEMBLY_STORAGE_MAP`).
+    pub ProcessAssemblyStorageMap: PVOID,
+    /// Pointer to the system default activation context.
+    pub SystemDefaultActivationContextData: PACTIVATION_CONTEXT_DATA,
+    /// Pointer to the system assembly storage map (`PASSEMBLY_STORAGE_MAP`).
+    pub SystemAssemblyStorageMap: PVOID,
+    /// Minimum stack commit size.
+    pub MinimumStackCommit: SIZE_T,
+    /// Spare pointers (previously `FlsCallback` through `FlsHighIndex` before 19H1).
+    pub SparePointers: [PVOID; 2],
+    /// Pointer to the patch loader data (`PLDR_PATCH_TABLE`).
+    pub PatchLoaderData: PVOID,
+    /// Pointer to the CHPE V2 process information (`CHPEV2_PROCESS_INFO`).
+    pub ChpeV2ProcessInfo: PVOID,
+    /// Packaged process feature state.
+    pub AppModelFeatureState: ULONG,
+    pub SpareUlongs: [ULONG; 2],
+    /// Active code page.
+    pub ActiveCodePage: USHORT,
+    /// OEM code page.
+    pub OemCodePage: USHORT,
+    /// Code page case mapping.
+    pub UseCaseMapping: USHORT,
+    /// Unused NLS field.
+    pub UnusedNlsField: USHORT,
+    /// Pointer to the application WER registration data (`PWER_PEB_HEADER_BLOCK`).
+    pub WerRegistrationData: PVOID,
+    /// Pointer to the application WER assert pointer (`PWER_REGISTRATION_DATA`).
+    pub WerShipAssertPtr: PVOID,
+    /// Switchback compatibility engine context or ARM64 EC bitmap.
+    pub Anonymous: PEB_0,
+    /// Reserved.
+    pub ImageHeaderHash: PVOID,
+    /// ETW tracing flags.
+    pub TracingFlags: ULONG,
+    /// Reserved for CSRSS.
+    pub CsrServerReadOnlySharedMemoryBase: ULONGLONG,
+    /// Thread pool worker list lock (`PRTL_SRWLOCK`).
+    pub TppWorkerpListLock: PVOID,
+    /// Thread pool worker list.
+    pub TppWorkerpList: LIST_ENTRY,
+    /// Wait on address hash table (`RtlWaitOnAddress`).
+    pub WaitOnAddressHashTable: [PVOID; 128],
+    /// Pointer to the telemetry coverage header (`PTELEMETRY_COVERAGE_HEADER`); since RS3.
+    pub TelemetryCoverageHeader: PVOID,
+    /// Cloud file flags (ProjFs and Cloud Files); since RS4.
+    pub CloudFileFlags: ULONG,
+    /// Cloud file diagnostic flags.
+    pub CloudFileDiagFlags: ULONG,
+    /// Placeholder compatibility mode (ProjFs and Cloud Files).
+    pub PlaceholderCompatibilityMode: CHAR,
+    /// Reserved for placeholder compatibility mode.
+    pub PlaceholderCompatibilityModeReserved: [CHAR; 7],
+    /// Pointer to leap second data (`PLEAP_SECOND_DATA`); since RS5.
+    pub LeapSecondData: PVOID,
+    /// Leap second flags.
+    pub LeapSecondFlags: ULONG,
+    /// Global flags for the process.
+    pub NtGlobalFlags2: ULONG,
+    /// Extended feature disable mask (AVX); since Windows 11.
+    pub ExtendedFeatureDisableMask: ULONGLONG,
+    /// Optional USER client process flags (`PCLIENTPROCINFO`), allocated by USER32.
+    pub Win32ClientProcInfo: PVOID,
+}
+
+/// Because I built the PEB struct by hand, these assertions should more or less ensure that fields
+/// are at the right offset.
+#[cfg(target_pointer_width = "64")]
+const _: () = {
+    use core::mem::{offset_of, size_of};
+
+    assert!(size_of::<ACTIVATION_CONTEXT_DATA>() == 0x20);
+    assert!(offset_of!(PEB, PostProcessInitRoutine) == 0x230);
+    assert!(offset_of!(PEB, TlsExpansionBitmap) == 0x238);
+    assert!(offset_of!(PEB, SessionId) == 0x2C0);
+    assert!(offset_of!(PEB, AppCompatFlags) == 0x2C8);
+    assert!(offset_of!(PEB, CSDVersion) == 0x2E8);
+    assert!(offset_of!(PEB, WerRegistrationData) == 0x358);
+    assert!(offset_of!(PEB, WaitOnAddressHashTable) == 0x3A0);
+    assert!(offset_of!(PEB, Win32ClientProcInfo) == 0x7D0);
+    assert!(size_of::<PEB>() == 0x7D8);
+};
