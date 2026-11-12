@@ -23,8 +23,13 @@
       mingw = pkgs.pkgsCross.mingwW64;
       mingwCC = mingw.stdenv.cc;
 
+      llvm = pkgs.llvmPackages; # probably pin this to a version (i.e. `.llvmPackages_<VERSION>`)
+
       rust = pkgs.rust-bin.stable.latest.default.override {
-        targets = [ "x86_64-pc-windows-gnu" ];
+        targets = [
+          "x86_64-pc-windows-gnu"
+          "x86_64-pc-windows-msvc"
+        ];
       };
     in
     {
@@ -32,18 +37,32 @@
         packages = [
           mingwCC
           rust
+          pkgs.cargo-xwin
+          llvm.clang-unwrapped
+          llvm.lld
+          llvm.llvm
+
           pkgs.wineWow64Packages.stable
         ];
 
         CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER = "${mingwCC}/bin/x86_64-w64-mingw32-gcc";
-        CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER = "wine";
         CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS = "-L native=${mingw.windows.pthreads}/lib";
+        CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER = "wine";
+
+        # `cargo-xwin` sets linker + SDK library paths for MSVC
+        CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER = "wine";
 
         WINEDEBUG = "-all";
         shellHook = ''
-          # export WINEPREFIX="$PWD/.wine"
-          export WINEPREFIX="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.wine"
+          export GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+          export WINEPREFIX="$GIT_ROOT/.wine"
+          export XWIN_CACHE_DIR="$GIT_ROOT/.xwin"
         '';
+
+        # NOTE that it looks like we can't use `cargo-xwin` during a nix package build
+        # as it downloads CRT/SDK libs at the "point-of-build", and the nix build
+        # sandbox doesn't have a network connection
+
       };
     };
 }

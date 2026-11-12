@@ -1,6 +1,16 @@
 [build]
-target = "x86_64-pc-windows-gnu"
+target = "x86_64-pc-windows-msvc"
+
+[target.x86_64-pc-windows-msvc]
+runner = "wine"
+# linker = "rust-lld"
+# linker = "lld-link" 
 
 [target.x86_64-pc-windows-gnu]
 linker = "x86_64-w64-mingw32-gcc"
 runner = "wine"
+
+[alias]
+run-gnu = "run --target x86_64-pc-windows-gnu"
+test-gnu = "test --target x86_64-pc-windows-gnu"
+build-gnu = "build --target x86_64-pc-windows-gnu"

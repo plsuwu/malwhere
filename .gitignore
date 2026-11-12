@@ -1,5 +1,7 @@
 .direnv/
 .wine/
+.xwin/
+testing/
 
 target
 Cargo.lock
