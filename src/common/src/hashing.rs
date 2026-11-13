@@ -196,6 +196,14 @@ macro_rules! widehash {
     }};
 }
 
+#[macro_export]
+macro_rules! rt_widehash {
+    ($s:expr, $k:expr) => {{
+        let hash = $crate::hashing::hash_u16_keyed(&$crate::winstring::rt_str_to_utf16($s), $k);
+        $crate::hashing::xor_hash(hash)
+    }};
+}
+
 #[cfg(test)]
 mod test {
     extern crate std;

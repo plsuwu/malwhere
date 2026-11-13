@@ -1,9 +1,31 @@
+#![allow(clippy::missing_safety_doc)]
+
 extern crate alloc;
-use alloc::string::{FromUtf16Error, String};
+use alloc::string::String;
+use alloc::vec::Vec;
+
+/// Converts a variable-length `&str` to a `Vec<u16>` at runtime
+pub fn rt_str_to_utf16(s: &str) -> Vec<u16> {
+    s.encode_utf16().chain(core::iter::once(0)).collect()
+}
+
+/// Converts a `*const u16` to a `String`, replacing invalid UTF-16 with U+FFFD.
+pub unsafe fn from_wptr(buf: *const u16, len: u16) -> String {
+    unsafe { String::from_utf16_lossy(unicode_string_as_slice(buf, len)) }
+}
 
 /// Calculates the length of a WCHAR buffer array via a `NUL` terminator. returns length of up to
 /// `MAX_PATH` (`260`).
 pub unsafe fn wptr_len(buf: *const u16) -> u16 {
+    let mut len = 0;
+    while unsafe { *buf.add(len) } != 0 && len < 260 {
+        len += 1;
+    }
+
+    len as _
+}
+
+pub unsafe fn ansi_len(buf: *const i8) -> u16 {
     let mut len = 0;
     while unsafe { *buf.add(len) } != 0 && len < 260 {
         len += 1;
@@ -19,11 +41,6 @@ pub unsafe fn unicode_string_as_slice<'a>(buf: *const u16, len: u16) -> &'a [u16
     }
 
     unsafe { core::slice::from_raw_parts(buf, (len / 2) as usize) }
-}
-
-/// Converts a `*const u16` to a `String`, replacing invalid UTF-16 with U+FFFD.
-pub unsafe fn from_wptr(buf: *const u16, len: u16) -> String {
-    unsafe { String::from_utf16_lossy(unicode_string_as_slice(buf, len)) }
 }
 
 pub const fn str_utf16_len(s: &str) -> usize {

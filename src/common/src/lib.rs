@@ -6,7 +6,6 @@ pub mod hashing;
 pub mod resolver;
 pub mod winapi;
 pub mod winstring;
-// pub mod bindings;
 
 pub mod prelude {
     pub use crate::alloc;
