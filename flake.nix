@@ -25,12 +25,16 @@
 
       llvm = pkgs.llvmPackages; # probably pin this to a version (i.e. `.llvmPackages_<VERSION>`)
 
-      rust = pkgs.rust-bin.stable.latest.default.override {
-        targets = [
-          "x86_64-pc-windows-gnu"
-          "x86_64-pc-windows-msvc"
-        ];
-      };
+      rust = pkgs.rust-bin.selectLatestNightlyWith (
+        tc:
+        tc.default.override {
+          extensions = [ "rust-src" ];
+          targets = [
+            "x86_64-pc-windows-gnu"
+            "x86_64-pc-windows-msvc"
+          ];
+        }
+      );
     in
     {
       devShells.${system}.default = pkgs.mkShell {

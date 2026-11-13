@@ -6,8 +6,8 @@ edition = "2024"
 [dependencies]
 bitflags = "2.13.2"
 
-[build-dependencies]
-windows-bindgen = { git = "https://github.com/microsoft/windows-rs.git" }
+# [build-dependencies]
+# windows-bindgen = { git = "https://github.com/microsoft/windows-rs.git" }
 
 [lib]
 doctest = false
@@ -18,4 +18,14 @@ doctest = false
 [[test]]
 name = "console_stdio"
 harness = false
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+lto = true
+strip = true
+opt-level = "z"
+codegen-units = 1
 

@@ -2,13 +2,14 @@
 
 extern crate alloc;
 
+use alloc::string::String;
 use core::ffi::c_void;
 use core::ptr;
 
 use crate::hashing::DEFAULT_KEY;
-use crate::winapi;
 use crate::winapi::PIMAGE_EXPORT_DIRECTORY;
-use crate::winstring::{ansi_len, from_wptr, wptr_len};
+use crate::winstring::{ansi_len, ansi_string_as_slice, from_ansi_ptr, from_wptr, wptr_len};
+use crate::{rt_widehash, winapi};
 
 // TODO replace this with something that doesn't look so obviously like PEB pointer retrieval
 //      -> see e.g. https://synawk.com/blog/peb-obfuscation-malware-dev-0x4
@@ -43,7 +44,7 @@ pub struct NtSyscall {
 
 impl NtSyscall {
     pub fn new(syscall_name: u64) -> Self {
-        let nt_hash = crate::widehash!("ntdllaskdjhf.dll\0", &DEFAULT_KEY);
+        let nt_hash = crate::widehash!("ntdll.dll\0", &DEFAULT_KEY);
         let ntcfg = ModuleInfo::new(nt_hash);
         crate::println!("recv result from module: {:?}", ntcfg.module_name);
         if ntcfg.module_base.is_null() {
@@ -55,59 +56,44 @@ impl NtSyscall {
 
         let names: alloc::vec::Vec<_> = unsafe {
             core::slice::from_raw_parts(
-                ntcfg.export_info.addr_of_names.addr() as *mut u32,
+                ntcfg.export_info.addr_of_names,
                 ntcfg.export_info.names_len as _,
             )
             .iter()
             .collect()
         };
 
-        crate::println!("{:#08x?}", names);
+        let ords: alloc::vec::Vec<_> = unsafe {
+            core::slice::from_raw_parts(
+                ntcfg.export_info.addr_of_ordinals,
+                ntcfg.export_info.names_len as _,
+            )
+            .iter()
+            .collect()
+        };
 
-        let rva_10 = names[10];
-        let addr = unsafe { ntcfg.module_base.add(*rva_10 as usize) } as *const core::ffi::c_char;
+        let funcs: alloc::vec::Vec<_> = unsafe {
+            core::slice::from_raw_parts(
+                ntcfg.export_info.addr_of_addresses,
+                ntcfg.export_info.funcs_len as _,
+            )
+            .iter()
+            .collect()
+        };
 
-        crate::println!("n: {:08x?}", addr);
+        assert_eq!(names.len(), ords.len());
 
-        // let strlen = unsafe { ansi_len(addr) };
+        for (i, &&rva) in names.iter().enumerate() {
+            let name_addr =
+                unsafe { ntcfg.module_base.add(rva as usize) } as *const core::ffi::c_uchar;
+            let fn_name = unsafe { from_ansi_ptr(name_addr) };
+            if rt_widehash!(&fn_name, &DEFAULT_KEY) == syscall_name {
+                let fn_ord = ords[i];
+                let fn_addr = unsafe { ntcfg.module_base.add(*funcs[*fn_ord as usize] as usize) };
 
-        // for &rva in names {
-        //
-        //     // alloc::string::String::from_utf8_lossy
-        //
-        // }
-
-        // i += 1;
-
-        //     let array_offset = i * size_of::<u32>();
-        //     let p_fn_name: *mut u8 =
-        //         { unsafe { ntcfg.export_info.addr_of_names.add(array_offset).addr() } } as _;
-        //
-        //     crate::println!("pfn_name: {:08x?}", p_fn_name);
-        //     // let p_fn_addr =
-        //     //     ntcfg.module_base + unsafe { ntcfg.export_info.addr_of_addresses.add(i).addr() };
-        //
-        //     let fn_name_len: usize = {
-        //         let mut len = 0;
-        //         while unsafe { *p_fn_name.add(len) } != 0 && len < 260 {
-        //             len += 1;
-        //         }
-        //
-        //         len as _
-        //     };
-        //
-        //     let fn_name_res = unsafe {
-        //         extern crate alloc;
-        //
-        //         let sl = core::slice::from_raw_parts(p_fn_name, fn_name_len);
-        //         alloc::string::String::from_utf8_lossy(sl)
-        //     };
-        //     //
-        //     crate::println!("p_fn_name: {}", fn_name_res);
-        //     // crate::println!("p_fn_addr: 0x{:016x?}", p_fn_addr);
-        //
-        //     i += 1;
-        // }
+                crate::println!("'{}' (ord={}) -> {:08x?}", fn_name, i, fn_addr);
+            }
+        }
 
         todo!()
     }
@@ -249,6 +235,10 @@ fn ntdll_base(peb: winapi::PEB) -> *mut winapi::LDR_DATA_TABLE_ENTRY {
 }
 
 fn enumerate_modules(peb: winapi::PEB, target: u64) -> *mut winapi::LDR_DATA_TABLE_ENTRY {
+    if target == crate::widehash!("ntdll.dll\0", &DEFAULT_KEY) {
+        return ntdll_base(peb);
+    }
+
     let mut curr_list_entry: *mut winapi::LIST_ENTRY =
         unsafe { (*peb.Ldr).InMemoryOrderModuleList.Flink };
     let ldr_head: *mut winapi::LIST_ENTRY = unsafe { (*curr_list_entry).Blink };
@@ -259,15 +249,15 @@ fn enumerate_modules(peb: winapi::PEB, target: u64) -> *mut winapi::LDR_DATA_TAB
         let name = unsafe { from_wptr(full_dll_name.Buffer, full_dll_name.Length) };
         let hash = crate::rt_widehash!(&name, &DEFAULT_KEY);
 
-        crate::println!(" -> module: {:24.24} \thash: 0x{:016x?}\taddr: 0x{:016x?}", name, hash, 
-            unsafe { (*curr).DllBase });
+        crate::println!(
+            " -> module: {:24.24} \thash: 0x{:016x?}\taddr: 0x{:016x?}",
+            name,
+            hash,
+            unsafe { (*curr).DllBase }
+        );
 
         if crate::rt_widehash!(&name, &DEFAULT_KEY) == target {
-            crate::println!("found target ok: base @ {:08x?}", unsafe {
-                (*curr).DllBase
-            });
-            crate::println!("from manual res: {:08x?}", ntdll_base(peb));
-            // return curr;
+            return curr;
         }
 
         if curr != unsafe { (*ldr_head).Blink as _ } {
@@ -276,10 +266,6 @@ fn enumerate_modules(peb: winapi::PEB, target: u64) -> *mut winapi::LDR_DATA_TAB
         } else {
             break;
         }
-    }
-
-    if target == crate::widehash!("ntdll.dll\0", &DEFAULT_KEY) {
-        return ntdll_base(peb);
     }
 
     crate::eprintln!("failed to get module: 0x{:016x?}", target);
@@ -294,7 +280,7 @@ mod test {
     use crate::hashing::DEFAULT_KEY;
 
     const NTDLL_NAME_HASH: u64 = crate::widehash!("ntdll.dll\0", &DEFAULT_KEY);
-    const JUNKHASH: u64 =  crate::widehash!("asdfasdf\0", &DEFAULT_KEY);
+    const JUNKHASH: u64 = crate::widehash!("asdfasdf\0", &DEFAULT_KEY);
 
     #[test]
     fn module_info_init() {

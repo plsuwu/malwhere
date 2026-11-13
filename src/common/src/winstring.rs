@@ -1,7 +1,9 @@
 #![allow(clippy::missing_safety_doc)]
 
 extern crate alloc;
+
 use alloc::string::String;
+use alloc::string::ToString;
 use alloc::vec::Vec;
 
 /// Converts a variable-length `&str` to a `Vec<u16>` at runtime
@@ -41,6 +43,19 @@ pub unsafe fn unicode_string_as_slice<'a>(buf: *const u16, len: u16) -> &'a [u16
     }
 
     unsafe { core::slice::from_raw_parts(buf, (len / 2) as usize) }
+}
+
+pub unsafe fn ansi_string_as_slice<'a>(buf: *const u8, len: u16) -> &'a [u8] {
+    if buf.is_null() {
+        return &[];
+    }
+
+    unsafe { core::slice::from_raw_parts(buf, len as usize) }
+}
+
+pub unsafe fn from_ansi_ptr(p: *const u8) -> String {
+    let len = unsafe { ansi_len(p as _) };
+    unsafe { String::from_utf8_lossy(ansi_string_as_slice(p, len)).to_string() }
 }
 
 pub const fn str_utf16_len(s: &str) -> usize {

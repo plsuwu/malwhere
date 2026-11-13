@@ -1,3 +1,13 @@
 [workspace]
 resolver = "3"
-members = ["common", "syscall"]
+members = ["bin", "common"]
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+lto = true
+strip = true
+opt-level = "z"
+codegen-units = 1
