@@ -6,8 +6,8 @@ use core::sync::atomic::{AtomicPtr, Ordering};
 
 use crate::winapi;
 
-/// Alignment `HeapAlloc` guarantees (`MEMORY_ALLOCATION_ALIGNMENT`)
-#[cfg(target_pointer_width = "64")] // 64-bit
+/// Alignment guaranteed by `HeapAlloc` (`MEMORY_ALLOCATION_ALIGNMENT`)
+#[cfg(target_pointer_width = "64")]
 const MIN_ALIGN: usize = 16;
 
 pub struct WinHeap;

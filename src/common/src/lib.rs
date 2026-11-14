@@ -3,12 +3,12 @@
 pub mod alloc;
 pub mod console;
 pub mod hashing;
-pub mod resolver;
 pub mod winapi;
 pub mod winstring;
 
 pub mod prelude {
-    pub use crate::alloc;
+    pub use crate::hashing::DEFAULT_KEY;
     pub use crate::winapi;
-    pub use crate::{print, println};
+    pub use crate::{eprint, eprintln, print, println};
+    pub use crate::{rt_widehash, widehash};
 }

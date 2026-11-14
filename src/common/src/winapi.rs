@@ -592,7 +592,7 @@ unsafe extern "system" {
     pub fn SetStdHandle(nStdHandle: DWORD, hHandle: HANDLE) -> BOOL;
 
     /// Ends the calling process and all its threads.
-    pub fn ExitProcess(uExitCode: UINT);
+    pub fn ExitProcess(uExitCode: UINT) -> !;
 
     /// Creates an anonymous pipe, and returns handles to the read and write ends of the pipe.
     pub fn CreatePipe(
