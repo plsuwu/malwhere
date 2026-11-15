@@ -171,6 +171,9 @@ fn enumerate_modules(peb: winapi::PEB, target: u64) -> *mut winapi::LDR_DATA_TAB
             unsafe { (*curr).DllBase }
         );
 
+        // TODO: i dont think this correctly resolves the actual module because i
+        //       can't remember how to do it properly so we will come back to this
+        //       at a later date...
         if common::rt_widehash!(&name, &DEFAULT_KEY) == target {
             return curr;
         }

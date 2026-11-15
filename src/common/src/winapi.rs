@@ -350,6 +350,12 @@ pub struct LARGE_INTEGER_1 {
     pub HighPart: LONG,
 }
 
+impl Default for LARGE_INTEGER {
+    fn default() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub union ULARGE_INTEGER {
@@ -520,6 +526,25 @@ pub struct _RTL_CRITICAL_SECTION_DEBUG {
 
 pub type PRTL_CRITICAL_SECTION_DEBUG = *mut _RTL_CRITICAL_SECTION_DEBUG;
 
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct SYSTEMTIME {
+    pub wYear: WORD,
+    pub wMonth: WORD,
+    pub wDayOfWeek: WORD,
+    pub wDay: WORD,
+    pub wHour: WORD,
+    pub wMinute: WORD,
+    pub wSecond: WORD,
+    pub wMilliseconds: WORD,
+}
+
+pub type LPSYSTEMTIME = *mut SYSTEMTIME;
+pub type PSYSTEMTIME = *mut SYSTEMTIME;
+
+#[repr(transparent)]
+pub struct NTSTATUS(pub i32);
+
 #[link(name = "kernel32")]
 unsafe extern "system" {
     /// Retrieves a handle to the default heap of the calling process. This handle can then be used
@@ -604,6 +629,17 @@ unsafe extern "system" {
 
     /// Closes an open object handle.
     pub fn CloseHandle(hObject: HANDLE) -> BOOL;
+
+    /// Retrieves the current value of the performance counter, which is a high resolution (<1us)
+    /// time stamp that can be used for time-interval measurements.
+    pub fn QueryPerformanceCounter(lpPerformanceCount: *mut LARGE_INTEGER) -> BOOL;
+    
+    /// Opens an existing local process object.
+    pub fn OpenProcess(dwDesiredAccess: DWORD, bInheritHandle: BOOL, dwProcessId: DWORD) -> HANDLE;
+
+    /// Retrieves the calling thread's last-error code value. The last-error code is maintained on 
+    /// a per-thread basis. Multiple threads do not overwrite each other's last-error code.
+    pub fn GetLastError() -> DWORD;
 }
 
 /// Constructed from [NtDoc `PEB`] types and documentation.

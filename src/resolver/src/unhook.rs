@@ -1,6 +1,6 @@
 use core::ffi::c_void;
+use core::slice::from_raw_parts;
 
-pub const MAX_JMP_HOPS: usize = 4;
 pub const JMP_OPCODE: [u8; 1] = [0xE9];
 pub const SYSCALL_OPCODES: [u8; 4] = [0x4C, 0x8B, 0xD1, 0xB8];
 pub const OFFSET_RANGE: usize = 0xFF;
@@ -24,7 +24,6 @@ pub fn check_opcodes(opcodes: &[u8]) -> Option<u32> {
 /// and returns None otherwise
 pub fn jmp_target(window: &[u8], hook_off: usize) -> Option<usize> {
     let head = window.get(hook_off..hook_off + 8)?;
-
     let (disp_off, end_off) = if head.starts_with(&JMP_OPCODE) {
         (1, 5)
     } else if head.starts_with(&SYSCALL_OPCODES[..3]) && head[3] == JMP_OPCODE[0] {
@@ -38,17 +37,16 @@ pub fn jmp_target(window: &[u8], hook_off: usize) -> Option<usize> {
         .try_into()
         .ok()
         .map(i32::from_le_bytes)?;
-
     let target = (hook_off + end_off).checked_add_signed(disp as isize)?;
-
     window.get(target..target + 8)?;
+
     Some(target)
 }
 
 /// Resolve the `rel32` displacement target of a hook at `addr`
 pub unsafe fn raw_jmp_target(addr: *const c_void) -> Option<*const c_void> {
     let window = unsafe {
-        core::slice::from_raw_parts(
+        from_raw_parts(
             (addr as *const u8).sub(OFFSET_RANGE - 1),
             OFFSET_RANGE * 2 + 8,
         )

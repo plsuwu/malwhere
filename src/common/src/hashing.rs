@@ -8,6 +8,8 @@ const P3: u64 = 0x1656_67b1_9e37_79f9;
 const MM1: u64 = 0x3c79_ac49_2ba7_b653;
 const MM2: u64 = 0x1c69_b3f7_4ac4_ae35;
 
+pub const DEFAULT_KEY: Key = derive_key(HASH_SEED);
+
 /// PRNG from [`Splitmix64`].
 ///
 /// Returns `(next_state, output)` tuple.
@@ -85,8 +87,6 @@ pub const fn derive_key(seed: u64) -> Key {
 
     Key { m, seed }
 }
-
-pub const DEFAULT_KEY: Key = derive_key(HASH_SEED);
 
 /// Pack four `u16`s into a single `u64` (little-endian)
 #[inline]
