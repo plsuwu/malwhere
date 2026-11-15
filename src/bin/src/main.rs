@@ -2,7 +2,7 @@
 //! so we do some conditional compilation to provide what MSVC and mingw both expect.
 //!
 //! Ultimately MSVC compiles this down way smaller (due to liballoc) and is generally less annoying
-//! so far, so we might wind up switching exclusively to `xwin` exclusively if this holds.
+//! so far, so we might wind up switching to `xwin` exclusively if this holds.
 
 #![allow(non_snake_case)]
 #![no_std]
