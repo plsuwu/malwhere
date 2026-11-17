@@ -1,3 +1,10 @@
+//! NOTE: Windows syscalls don't behave as expected through Wine as they are often translated to a
+//! Linux equivalent "under the hood", completely bypassing the Windows syscall (which makes sense
+//! in hindsight). 
+//!
+//! Trying to call an API function this way will not work correctly on Wine - which is kind of good
+//! to know, in all reality.
+
 #![allow(non_snake_case, non_camel_case_types, non_upper_case_globals)]
 
 extern crate alloc;
@@ -28,17 +35,8 @@ pub struct NtSyscall {
     pub inst_address: winapi::PVOID,
 }
 
-/// Indirect syscall that uses the stack to pass arguments (6-arg call).
-///
-/// NOTE: Windows syscalls don't behave as expected through Wine as they are often translated to a
-/// Linux equivalent "under the hood", completely bypassing the Windows syscall (which makes sense
-/// in hindsight). Trying to call `NtAllocateVirtualMemory` this way will not work correctly on 
-/// Wine - which is kind of good to know, in all reality.
-///
-/// TODO: perhaps attempt to make this more generic - base on arg count rather than being specific
-/// to `NtAllocateVirtualMemory`...
 pub unsafe fn _NtAllocateVirtualMemory(
-    syscall: &NtSyscall,
+    sc: &NtSyscall,
     ProcessHandle: HANDLE,
     BaseAddress: *mut PVOID,
     ZeroBits: ULONG_PTR,
@@ -46,30 +44,53 @@ pub unsafe fn _NtAllocateVirtualMemory(
     AllocationType: ULONG,
     Protect: ULONG,
 ) -> i32 {
+    unsafe {
+        syscall_6(
+            sc,
+            ProcessHandle as _,
+            BaseAddress as _,
+            ZeroBits as _,
+            RegionSize as _,
+            AllocationType as _,
+            Protect as _,
+        )
+    }
+}
+
+/// Indirect syscall that uses the stack to pass arguments (6-arg call).
+pub unsafe fn syscall_6(
+    sc: &NtSyscall,
+    arg_1: u64,
+    arg_2: u64,
+    arg_3: u64,
+    arg_4: u64,
+    arg_5: u64,
+    arg_6: u64,
+) -> i32 {
     let mut status: u64;
     unsafe {
         core::arch::asm!(
             // the syscall stub reads the stack at `[rsp+0x28]` and `[rsp+0x30]` after `call`
             // pushes the return address
             "push rbp",
-            "push {protect}",
-            "push {alloc_type}",
+            "push {arg_6}",
+            "push {arg_5}",
             "sub rsp, 0x20",        // shadow space
             "call {inst}",          // `inst` is a ptr to `0x0f,0x05`
             "add rsp, 0x30",
             "pop rbp",
-            inst = in(reg) syscall.inst_address,
+            inst = in(reg) sc.inst_address,
             // `rax` is SSN on input and `NTSTATUS` on output
-            inout("rax") syscall.ssn as u64 => status,
-            in("r10") ProcessHandle as u64,
-            in("rdx") BaseAddress as u64,
-            in("r8") ZeroBits as u64,
-            in("r9") RegionSize as u64,
+            inout("rax") sc.ssn as u64 => status,
+            in("r10") arg_1,
+            in("rdx") arg_2,
+            in("r8") arg_3,
+            in("r9") arg_4,
             // `rcx`/`r11` (RIP/EFLAGS) clobbered by syscall
             out("rcx") _,
             out("r11") _,
-            protect = in(reg) Protect as u64,
-            alloc_type = in(reg) AllocationType as u64,
+            arg_6 = in(reg) arg_6,
+            arg_5 = in(reg) arg_5,
         );
     }
     status as i32

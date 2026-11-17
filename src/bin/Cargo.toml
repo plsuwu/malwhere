@@ -6,6 +6,3 @@ edition = "2024"
 [dependencies]
 common = { path = "../common" }
 resolver = { path = "../resolver" }
-
-[features]
-stdout = []
