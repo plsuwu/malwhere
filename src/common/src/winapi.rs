@@ -10,6 +10,7 @@ pub type WORD = u16;
 pub type ULONG = u32;
 pub type UINT = u32;
 pub type DWORD = u32;
+pub type DWORD64 = u64;
 pub type HEAP_FLAGS = u32;
 pub type BOOL = i32;
 pub type LONG = i32;
@@ -26,6 +27,7 @@ pub type LPCVOID = *const core::ffi::c_void;
 
 pub type PULONG = *mut ULONG;
 pub type PWSTR = *mut WCHAR;
+pub type LPCWSTR = *const WCHAR;
 pub type PWCHAR = *mut WCHAR;
 pub type PWORD = *mut WORD;
 pub type PDWORD = *mut DWORD;
@@ -55,6 +57,8 @@ pub const INVALID_HANDLE_VALUE: HANDLE = (-1i64).cast_unsigned() as _;
 pub const STD_INPUT_HANDLE: DWORD = (-10i32).cast_unsigned();
 pub const STD_OUTPUT_HANDLE: DWORD = (-11i32).cast_unsigned();
 pub const STD_ERROR_HANDLE: DWORD = (-12i32).cast_unsigned();
+
+pub const CONTEXT_DEBUG_REGISTERS: DWORD = 0x100010;
 
 pub type FARPROC = Option<unsafe extern "system" fn() -> INT_PTR>;
 
@@ -545,7 +549,12 @@ pub type PSYSTEMTIME = *mut SYSTEMTIME;
 #[repr(transparent)]
 pub struct NTSTATUS(pub i32);
 
-#[link(name = "kernel32")]
+#[repr(C)]
+pub struct SRWLOCK {
+    pub ptr: *mut core::ffi::c_void,
+}
+
+#[link(name = "kernel32", kind = "raw-dylib")]
 unsafe extern "system" {
     /// Retrieves a handle to the default heap of the calling process. This handle can then be used
     /// in subsequent calls to the heap functions.
@@ -627,20 +636,64 @@ unsafe extern "system" {
         nSize: DWORD,
     ) -> BOOL;
 
+    pub fn AddVectoredExceptionHandler(First: ULONG, Handler: PVECTORED_EXCEPTION_HANDLER)
+    -> PVOID;
+
     /// Closes an open object handle.
     pub fn CloseHandle(hObject: HANDLE) -> BOOL;
 
     /// Retrieves the current value of the performance counter, which is a high resolution (<1us)
     /// time stamp that can be used for time-interval measurements.
     pub fn QueryPerformanceCounter(lpPerformanceCount: *mut LARGE_INTEGER) -> BOOL;
-    
+
     /// Opens an existing local process object.
     pub fn OpenProcess(dwDesiredAccess: DWORD, bInheritHandle: BOOL, dwProcessId: DWORD) -> HANDLE;
 
-    /// Retrieves the calling thread's last-error code value. The last-error code is maintained on 
+    /// Retrieves the calling thread's last-error code value. The last-error code is maintained on
     /// a per-thread basis. Multiple threads do not overwrite each other's last-error code.
     pub fn GetLastError() -> DWORD;
 }
+
+pub type PCONTEXT = *mut CONTEXT;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EXCEPTION_POINTERS {
+    pub ExceptionRecord: PEXCEPTION_RECORD,
+    pub ContextRecord: PCONTEXT,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EXCEPTION_RECORD {
+    pub ExceptionCode: DWORD,
+    pub ExceptionFlags: DWORD,
+    pub ExceptionRecord: *mut Self,
+    pub ExceptionAddress: PVOID,
+    pub NumberParameters: DWORD,
+    pub ExceptionInformation: [ULONG_PTR; 15],
+}
+
+pub type PEXCEPTION_RECORD = *mut EXCEPTION_RECORD;
+pub type PVECTORED_EXCEPTION_HANDLER =
+    unsafe extern "system" fn(exceptioninfo: *mut EXCEPTION_POINTERS) -> LONG;
+
+pub const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 0x0000_0002;
+pub const SYSTEM_PREFERRED_ALG_HANDLE: BCRYPT_ALG_HANDLE = BCRYPT_ALG_HANDLE(core::ptr::null_mut());
+
+#[link(name = "bcrypt", kind = "raw-dylib")]
+unsafe extern "system" {
+    /// The BCryptGenRandom function generates a random number.
+    pub fn BCryptGenRandom(
+        hAlgorithm: BCRYPT_ALG_HANDLE,
+        pbBuffer: *mut BYTE,
+        cbBuffer: ULONG,
+        dwFlags: ULONG,
+    ) -> i32;
+}
+
+#[repr(transparent)]
+pub struct BCRYPT_ALG_HANDLE(pub *mut core::ffi::c_void);
 
 /// Constructed from [NtDoc `PEB`] types and documentation.
 ///
@@ -834,6 +887,141 @@ pub struct PEB {
     pub ExtendedFeatureDisableMask: ULONGLONG,
     /// Optional USER client process flags (`PCLIENTPROCINFO`), allocated by USER32.
     pub Win32ClientProcInfo: PVOID,
+}
+
+#[repr(C, align(16))]
+#[derive(Clone, Copy)]
+pub struct CONTEXT {
+    pub P1Home: DWORD64,
+    pub P2Home: DWORD64,
+    pub P3Home: DWORD64,
+    pub P4Home: DWORD64,
+    pub P5Home: DWORD64,
+    pub P6Home: DWORD64,
+    pub ContextFlags: DWORD,
+    pub MxCsr: DWORD,
+    pub SegCs: WORD,
+    pub SegDs: WORD,
+    pub SegEs: WORD,
+    pub SegFs: WORD,
+    pub SegGs: WORD,
+    pub SegSs: WORD,
+    pub EFlags: DWORD,
+    pub Dr0: DWORD64,
+    pub Dr1: DWORD64,
+    pub Dr2: DWORD64,
+    pub Dr3: DWORD64,
+    pub Dr6: DWORD64,
+    pub Dr7: DWORD64,
+    pub Rax: DWORD64,
+    pub Rcx: DWORD64,
+    pub Rdx: DWORD64,
+    pub Rbx: DWORD64,
+    pub Rsp: DWORD64,
+    pub Rbp: DWORD64,
+    pub Rsi: DWORD64,
+    pub Rdi: DWORD64,
+    pub R8: DWORD64,
+    pub R9: DWORD64,
+    pub R10: DWORD64,
+    pub R11: DWORD64,
+    pub R12: DWORD64,
+    pub R13: DWORD64,
+    pub R14: DWORD64,
+    pub R15: DWORD64,
+    pub Rip: DWORD64,
+    pub Anonymous: CONTEXT_0,
+    pub VectorRegister: [M128A; 26],
+    pub VectorControl: DWORD64,
+    pub DebugControl: DWORD64,
+    pub LastBranchToRip: DWORD64,
+    pub LastBranchFromRip: DWORD64,
+    pub LastExceptionToRip: DWORD64,
+    pub LastExceptionFromRip: DWORD64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union CONTEXT_0 {
+    pub FltSave: XMM_SAVE_AREA32,
+    pub Anonymous: CONTEXT_0_0,
+}
+
+#[repr(C, align(16))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct XSAVE_FORMAT {
+    pub ControlWord: WORD,
+    pub StatusWord: WORD,
+    pub TagWord: BYTE,
+    pub Reserved1: BYTE,
+    pub ErrorOpcode: WORD,
+    pub ErrorOffset: DWORD,
+    pub ErrorSelector: WORD,
+    pub Reserved2: WORD,
+    pub DataOffset: DWORD,
+    pub DataSelector: WORD,
+    pub Reserved3: WORD,
+    pub MxCsr: DWORD,
+    pub MxCsr_Mask: DWORD,
+    pub FloatRegisters: [M128A; 8],
+    pub XmmRegisters: [M128A; 16],
+    pub Reserved4: [BYTE; 96],
+}
+
+pub type XMM_SAVE_AREA32 = XSAVE_FORMAT;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CONTEXT_0_0 {
+    pub Header: [M128A; 2],
+    pub Legacy: [M128A; 8],
+    pub Xmm0: M128A,
+    pub Xmm1: M128A,
+    pub Xmm2: M128A,
+    pub Xmm3: M128A,
+    pub Xmm4: M128A,
+    pub Xmm5: M128A,
+    pub Xmm6: M128A,
+    pub Xmm7: M128A,
+    pub Xmm8: M128A,
+    pub Xmm9: M128A,
+    pub Xmm10: M128A,
+    pub Xmm11: M128A,
+    pub Xmm12: M128A,
+    pub Xmm13: M128A,
+    pub Xmm14: M128A,
+    pub Xmm15: M128A,
+}
+
+impl Default for XSAVE_FORMAT {
+    fn default() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
+}
+
+#[repr(C, align(16))]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct M128A {
+    pub Low: ULONGLONG,
+    pub High: LONGLONG,
+}
+
+impl Default for CONTEXT_0_0 {
+    fn default() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
+}
+
+impl Default for CONTEXT_0 {
+    fn default() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
+}
+
+impl Default for CONTEXT {
+    fn default() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
 }
 
 /// Because I built the PEB struct by hand, these assertions should more or less ensure that fields

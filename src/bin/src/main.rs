@@ -9,14 +9,20 @@
 #![no_main]
 #![windows_subsystem = "console"]
 
+extern crate alloc;
+use alloc::string::{String, ToString};
 use core::ffi::c_void;
 
 #[cfg(not(test))]
 use core::panic::PanicInfo;
 
 use common::alloc::WinHeap;
-use common::winapi::{ExitProcess, GetLastError, PVOID, SIZE_T};
+use common::winapi::{
+    AddVectoredExceptionHandler, CONTEXT, ExitProcess, GetLastError, PVOID, SIZE_T,
+};
+use common::winapi::{EXCEPTION_POINTERS, LONG, PVECTORED_EXCEPTION_HANDLER};
 use common::{hashing::DEFAULT_KEY, widehash};
+use hooklib::{DRX, VectorHandler, set_hardware_breakpoint};
 use resolver::syscall::{_NtAllocateVirtualMemory, NtSyscall};
 
 #[global_allocator]
@@ -55,42 +61,30 @@ fn mainCRTStartup() -> u64 {
     startup()
 }
 
+#[unsafe(no_mangle)]
+fn example_function() -> String {
+    "normal return".to_string()
+}
+
+#[unsafe(no_mangle)]
+fn detour_function() -> String {
+    "scary return".to_string()
+}
+
 fn startup() -> u64 {
-    let syscall_hash = widehash!("NtAllocateVirtualMemory\0", &DEFAULT_KEY);
-    let syscall_cfg = NtSyscall::new(syscall_hash);
+    let addr: *const c_void = example_function as _;
+    let detour_addr: *const c_void = detour_function as _;
 
-    #[cfg(debug_assertions)]
-    common::println!("SYSCALL: {:#?}", syscall_cfg);
+    let handler: PVECTORED_EXCEPTION_HANDLER = VectorHandler as _;
+    let _ = unsafe { AddVectoredExceptionHandler(1, handler) };
 
-    let mut allocation: PVOID = core::ptr::null_mut();
+    let string1 = example_function();
+    common::println!("string 1: {}", string1);
 
-    let mut region_sz: SIZE_T = 123;
-    let status = unsafe {
-        _NtAllocateVirtualMemory(
-            &syscall_cfg,
-            (-1i64).cast_unsigned() as *const c_void as _,
-            &mut allocation,
-            0x00,
-            (&mut region_sz) as _,
-            0x00001000 | 0x00002000,
-            0x04,
-        )
-    };
+    set_hardware_breakpoint(addr, detour_addr, DRX::Dr0);
 
-    if status != 0x00 {
-        common::eprintln!("failed: {:?}", status);
-        common::eprintln!("lasterr: {:?}", unsafe { GetLastError() });
-        unsafe {
-            ExitProcess(1);
-        }
-    }
+    let string1 = example_function();
+    common::println!("string 2: {}", string1);
 
-    #[cfg(debug_assertions)]
-    {
-        common::println!("status: {:08x?}", status);
-        common::println!("alloc: {:p}", allocation);
-        common::println!("region: {}", region_sz);
-    }
-
-    syscall_cfg.ssn as _
+    0
 }

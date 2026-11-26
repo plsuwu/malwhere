@@ -6,8 +6,8 @@ edition = "2024"
 [dependencies]
 bitflags = "2.13.2"
 
-# [build-dependencies]
-# windows-bindgen = { git = "https://github.com/microsoft/windows-rs.git" }
+[build-dependencies]
+windows-bindgen = { git = "https://github.com/microsoft/windows-rs.git" }
 
 [lib]
 doctest = false

@@ -1,6 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["bin", "common", "resolver"]
+members = ["bin", "common", "hooklib", "resolver"]
+
+[workspace.dependencies]
+bitflags = "2.13.2"
 
 [profile.dev]
 panic = "abort"

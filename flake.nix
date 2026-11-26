@@ -32,6 +32,7 @@
           targets = [
             "x86_64-pc-windows-gnu"
             "x86_64-pc-windows-msvc"
+            "x86_64-unknown-linux-gnu"
           ];
         }
       );
@@ -41,12 +42,13 @@
         packages = [
           mingwCC
           rust
-          pkgs.cargo-xwin
           llvm.clang-unwrapped
           llvm.lld
           llvm.llvm
 
+          pkgs.cargo-xwin
           pkgs.wineWow64Packages.stable
+          pkgs.uv
         ];
 
         CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER = "${mingwCC}/bin/x86_64-w64-mingw32-gcc";

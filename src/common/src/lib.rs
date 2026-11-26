@@ -5,6 +5,7 @@ pub mod console;
 pub mod hashing;
 pub mod winapi;
 pub mod winstring;
+pub mod rand;
 
 pub mod prelude {
     pub use crate::hashing::DEFAULT_KEY;

@@ -1,6 +1,6 @@
 //! NOTE: Windows syscalls don't behave as expected through Wine as they are often translated to a
 //! Linux equivalent "under the hood", completely bypassing the Windows syscall (which makes sense
-//! in hindsight). 
+//! in hindsight).
 //!
 //! Trying to call an API function this way will not work correctly on Wine - which is kind of good
 //! to know, in all reality.
@@ -14,7 +14,7 @@ use core::ptr;
 use core::slice::from_raw_parts;
 
 use common::prelude::*;
-use common::winapi::{HANDLE, PVOID, SIZE_T, ULONG, ULONG_PTR};
+use common::winapi::{HANDLE, LARGE_INTEGER, PVOID, SIZE_T, ULONG, ULONG_PTR};
 use common::winstring::from_ansi_ptr;
 
 use crate::module::Module;
@@ -94,6 +94,58 @@ pub unsafe fn syscall_6(
         );
     }
     status as i32
+}
+
+/// locks the calling thread until another thread calls [`NtAlertThreadByThreadId`] with a matching
+/// `address`, or until `timeout` expires.
+pub unsafe fn _NtWaitForAlertByThreadId(
+    sc: &NtSyscall,
+    address: *mut c_void,
+    timeout: *const LARGE_INTEGER,
+) -> i32 {
+    unsafe { syscall_2(sc, address as u64, timeout as _) }
+}
+
+/// sends an alert to the thread specified by `thread_id`.
+pub unsafe fn _NtAlertThreadByThreadId(sc: &NtSyscall, thread_id: u32) -> i32 {
+    unsafe { syscall_1(sc, thread_id as _) }
+}
+
+#[unsafe(naked)]
+pub unsafe extern "win64" fn syscall_1(sc: &NtSyscall, arg: u64) -> i32 {
+    core::arch::naked_asm!(
+        // win64 ABI:
+        //    rcx  = sc
+        //    rdx  = arg
+        // syscall ABI:
+        //    r10  = arg1
+        //    rdx  = arg2
+        //    r8   = arg3
+        //    r9   = arg4
+        "mov r10, rdx",
+        "mov eax, dword ptr [rcx + {ssn_off}]",
+        "mov r11, qword ptr [rcx + {inst_off}]",
+        "jmp r11",
+        ssn_off = const core::mem::offset_of!(NtSyscall, ssn),
+        inst_off = const core::mem::offset_of!(NtSyscall, inst_address),
+    )
+}
+
+#[unsafe(naked)]
+pub unsafe extern "win64" fn syscall_2(sc: &NtSyscall, arg_1: u64, arg_2: u64) -> i32 {
+    core::arch::naked_asm!(
+        // win64 ABI:
+        //    rcx  = sc
+        //    rdx  = arg_1
+        //    r8   = arg_2
+        "mov r10, rdx",
+        "mov rdx, r8",
+        "mov eax, dword ptr [rcx + {ssn_off}]",
+        "mov r11, qword ptr [rcx + {inst_off}]",
+        "jmp r11",
+        ssn_off = const core::mem::offset_of!(NtSyscall, ssn),
+        inst_off = const core::mem::offset_of!(NtSyscall, inst_address),
+    )
 }
 
 impl NtSyscall {
