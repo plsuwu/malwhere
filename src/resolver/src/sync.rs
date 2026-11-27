@@ -90,7 +90,7 @@ impl<T> Mutex<T> {
 
     #[cold]
     fn lock_slow(&self) {
-        let tid = current_thread_id();
+        let tid = super::current_thread_id();
         loop {
             if self
                 .state
@@ -119,7 +119,7 @@ impl<T> Mutex<T> {
                     _NtWaitForAlertByThreadId(
                         &wait_sc(),
                         &self.state as *const _ as *mut c_void,
-                        core::ptr::null(), // no timeout/wait infinite
+                        core::ptr::null(), // no timeout
                     )
                 };
 
@@ -127,7 +127,7 @@ impl<T> Mutex<T> {
                     .sleeper
                     .compare_exchange(tid, 0, Ordering::SeqCst, Ordering::Relaxed);
             } else {
-                // another thread owns parking lot, progress by spinning
+                // another thread owns the parking lot, so we progress by spinning
                 hint::spin_loop();
             }
         }
@@ -142,18 +142,4 @@ impl<T> Mutex<T> {
             unsafe { _NtAlertThreadByThreadId(&alert_sc(), tid as u32) };
         }
     }
-}
-
-#[inline]
-pub fn current_thread_id() -> usize {
-    let id: usize;
-    unsafe {
-        core::arch::asm!(
-            "mov {}, gs:[0x48]",
-            out(reg) id,
-            options(nostack, readonly, preserves_flags)
-        );
-    }
-
-    id
 }

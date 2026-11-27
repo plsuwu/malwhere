@@ -10,20 +10,25 @@
 #![windows_subsystem = "console"]
 
 extern crate alloc;
-use alloc::string::{String, ToString};
+use common::winstring::{self, rt_str_to_utf16};
 use core::ffi::c_void;
+use core::ptr::null_mut;
+use hooklib::breakpoint::{install_breakpoint, remove_breakpoint};
+use hooklib::hook::{block_execution, clobber_return, continue_execution, set_fn_arg};
+use hooklib::registers::DRX;
 
 #[cfg(not(test))]
 use core::panic::PanicInfo;
 
 use common::alloc::WinHeap;
 use common::winapi::{
-    AddVectoredExceptionHandler, CONTEXT, ExitProcess, GetLastError, PVOID, SIZE_T,
+    AddVectoredExceptionHandler, CONTEXT, ExitProcess, GetLastError, MB_ICONASTERISK,
+    MB_ICONQUESTION, MB_OK, MessageBoxW, PVOID, SIZE_T,
 };
 use common::winapi::{EXCEPTION_POINTERS, LONG, PVECTORED_EXCEPTION_HANDLER};
 use common::{hashing::DEFAULT_KEY, widehash};
-use hooklib::{DRX, VectorHandler, set_hardware_breakpoint};
-use resolver::syscall::{_NtAllocateVirtualMemory, NtSyscall};
+use hooklib::VectorHandler;
+use resolver::syscall::{_NtAllocateVirtualMemory, _NtSetContextThread, NtSyscall};
 
 #[global_allocator]
 static GLOBAL: WinHeap = WinHeap;
@@ -62,29 +67,64 @@ fn mainCRTStartup() -> u64 {
 }
 
 #[unsafe(no_mangle)]
-fn example_function() -> String {
-    "normal return".to_string()
+fn example_function(a: u64, b: u64) -> u64 {
+    a + b
 }
 
 #[unsafe(no_mangle)]
-fn detour_function() -> String {
-    "scary return".to_string()
+fn detour_function(ctx: &mut CONTEXT) {
+    clobber_return(ctx, 9999);
+    block_execution(ctx);
+}
+
+fn scary_mb(ctx: &mut CONTEXT) {
+    let text_str = "scary message";
+    let capt_str = "freaky";
+    unsafe {
+        set_fn_arg(ctx, rt_str_to_utf16(text_str).as_ptr() as _, 1);
+        set_fn_arg(ctx, rt_str_to_utf16(capt_str).as_ptr() as _, 2);
+        set_fn_arg(ctx, MB_ICONQUESTION as _, 3);
+    };
+    continue_execution(ctx);
 }
 
 fn startup() -> u64 {
-    let addr: *const c_void = example_function as _;
-    let detour_addr: *const c_void = detour_function as _;
+    let target_a: *const c_void = example_function as _;
+    let detour_a: *const c_void = detour_function as _;
 
     let handler: PVECTORED_EXCEPTION_HANDLER = VectorHandler as _;
     let _ = unsafe { AddVectoredExceptionHandler(1, handler) };
 
-    let string1 = example_function();
+    let string1 = example_function(10, 20);
     common::println!("string 1: {}", string1);
 
-    set_hardware_breakpoint(addr, detour_addr, DRX::Dr0);
+    install_breakpoint(target_a, detour_a, DRX::Dr0);
 
-    let string1 = example_function();
+    let string1 = example_function(10, 20);
     common::println!("string 2: {}", string1);
+
+    let text_str = "normal message";
+    let caption_str = "normal";
+
+    unsafe {
+        MessageBoxW(
+            null_mut(),
+            rt_str_to_utf16(text_str).as_ptr(),
+            rt_str_to_utf16(caption_str).as_ptr(),
+            MB_ICONASTERISK | MB_OK,
+        )
+    };
+
+    install_breakpoint(MessageBoxW as _, scary_mb as _, DRX::Dr1);
+
+    unsafe {
+        MessageBoxW(
+            null_mut(),
+            rt_str_to_utf16(text_str).as_ptr(),
+            rt_str_to_utf16(caption_str).as_ptr(),
+            MB_ICONASTERISK | MB_OK,
+        )
+    };
 
     0
 }

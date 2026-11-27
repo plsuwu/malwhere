@@ -26,6 +26,20 @@ pub unsafe fn readgsqword(offset: u64) -> u64 {
     res
 }
 
+#[inline]
+pub fn current_thread_id() -> usize {
+    let id: usize;
+    unsafe {
+        core::arch::asm!(
+            "mov {}, gs:[0x48]",
+            out(reg) id,
+            options(nostack, readonly, preserves_flags)
+        );
+    }
+
+    id
+}
+
 /// Use `BCryptGenRandom` to seed
 pub fn rand_with_max(max: u64) -> u64 {
     let seed: u64 = common::rand::random_seed();

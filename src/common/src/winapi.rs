@@ -59,6 +59,9 @@ pub const STD_OUTPUT_HANDLE: DWORD = (-11i32).cast_unsigned();
 pub const STD_ERROR_HANDLE: DWORD = (-12i32).cast_unsigned();
 
 pub const CONTEXT_DEBUG_REGISTERS: DWORD = 0x100010;
+pub const EXCEPTION_SINGLE_STEP: DWORD = 0x80000004;
+pub const EXCEPTION_CONTINUE_EXECUTION: LONG = -1;
+pub const EXCEPTION_CONTINUE_SEARCH: LONG = 0;
 
 pub type FARPROC = Option<unsafe extern "system" fn() -> INT_PTR>;
 
@@ -653,6 +656,35 @@ unsafe extern "system" {
     /// a per-thread basis. Multiple threads do not overwrite each other's last-error code.
     pub fn GetLastError() -> DWORD;
 }
+
+#[link(name = "user32", kind = "raw-dylib")]
+unsafe extern "system" {
+    /// Displays a modal dialog box that contains a system icon, a set of buttons, and a brief
+    /// application-specific message, such as status or error information. The message box returns
+    /// an integer value that indicates which button the user clicked.
+    pub fn MessageBoxW(hWnd: HWND, lpText: LPCWSTR, lpCaption: LPCWSTR, uType: UINT) -> i32;
+}
+
+///  Adds a **Help** button to the message box. When the user clicks the **Help** button or presses
+///  `F1`, the system sends a `WM_HELP` message to the owner.
+pub const MB_HELP: UINT = 0x00004000;
+/// The message box contains one push button: **OK**. This is the default.
+pub const MB_OK: UINT = 0x00000000;
+/// The message box contains two push buttons: **Yes** and **No**.
+pub const MB_YESNO: UINT = 0x00000004;
+/// The message box contains three push buttons: **Yes**, **No**, and **Cancel**.
+pub const MB_YESNOCANCEL: UINT = 0x00000003;
+
+pub const MB_ICONEXCLAMATION: UINT = 0x00000030;
+pub const MB_ICONWARNING: UINT = 0x00000030;
+pub const MB_ICONINFORMATION: UINT = 0x00000040;
+pub const MB_ICONASTERISK: UINT = 0x00000040;
+pub const MB_ICONQUESTION: UINT = 0x00000020;
+pub const MB_ICONSTOP: UINT = 0x00000010;
+pub const MB_ICONERROR: UINT = 0x00000010;
+pub const MB_ICONHAND: UINT = 0x00000010;
+
+pub type HWND = HANDLE;
 
 pub type PCONTEXT = *mut CONTEXT;
 

@@ -14,7 +14,7 @@ use core::ptr;
 use core::slice::from_raw_parts;
 
 use common::prelude::*;
-use common::winapi::{HANDLE, LARGE_INTEGER, PVOID, SIZE_T, ULONG, ULONG_PTR};
+use common::winapi::{CONTEXT, HANDLE, LARGE_INTEGER, PVOID, SIZE_T, ULONG, ULONG_PTR};
 use common::winstring::from_ansi_ptr;
 
 use crate::module::Module;
@@ -109,6 +109,22 @@ pub unsafe fn _NtWaitForAlertByThreadId(
 /// sends an alert to the thread specified by `thread_id`.
 pub unsafe fn _NtAlertThreadByThreadId(sc: &NtSyscall, thread_id: u32) -> i32 {
     unsafe { syscall_1(sc, thread_id as _) }
+}
+
+pub fn _NtGetContextThread(
+    sc: &NtSyscall,
+    ThreadHandle: HANDLE,
+    ThreadContext: *mut CONTEXT,
+) -> i32 {
+    unsafe { syscall_2(sc, ThreadHandle as _, ThreadContext as _) }
+}
+
+pub fn _NtSetContextThread(
+    sc: &NtSyscall,
+    ThreadHandle: HANDLE,
+    ThreadContext: *mut CONTEXT,
+) -> i32 {
+    unsafe { syscall_2(sc, ThreadHandle as _, ThreadContext as _) }
 }
 
 #[unsafe(naked)]

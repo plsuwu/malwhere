@@ -2,6 +2,7 @@
 .wine/
 .xwin/
 testing/
+shellcode-template/
 
 target
 Cargo.lock

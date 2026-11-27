@@ -194,6 +194,10 @@ macro_rules! widehash {
 
         $crate::hashing::xor_hash(HASH)
     }};
+
+    ($s:expr) => {{
+        $crate::widehash!($s, &$crate::hashing::DEFAULT_KEY)
+    }};
 }
 
 #[macro_export]
@@ -201,6 +205,10 @@ macro_rules! rt_widehash {
     ($s:expr, $k:expr) => {{
         let hash = $crate::hashing::hash_u16_keyed(&$crate::winstring::rt_str_to_utf16($s), $k);
         $crate::hashing::xor_hash(hash)
+    }};
+
+    ($s:expr) => {{
+        $crate::rt_widehash!($s, &$crate::hashing::DEFAULT_KEY)
     }};
 }
 
@@ -275,6 +283,15 @@ mod test {
 
         assert_eq!(HASHED, 0x39C9_13CE_D12F_7411);
     }
+
+    #[test]
+    fn widehash_macro_with_implicit_key() {
+        const TEST_STR: &str = "hello 123";
+        const HASHED: u64 = crate::widehash!(TEST_STR);
+
+        assert_eq!(HASHED, 0x39C9_13CE_D12F_7411);
+    }
+
 
     #[test]
     fn widehash_macro_with_seeded_key() {
