@@ -3,41 +3,54 @@
 #![no_std]
 
 pub mod module;
-pub mod syscall;
 pub mod sync;
+pub mod syscall;
 pub mod unhook;
 
-// TODO replace these register calls with something that doesn't look so obviously like
-//      e.g. PEB pointer retrieval or whatever
-//
-//      -> see e.g. https://synawk.com/blog/peb-obfuscation-malware-dev-0x4
-#[inline]
+#[inline(always)]
 #[cfg(all(target_pointer_width = "64", target_arch = "x86_64"))]
 pub unsafe fn readgsqword(offset: u64) -> u64 {
-    let res;
+    let res: u64;
     unsafe {
         core::arch::asm!(
-            "mov {}, qword ptr gs:[{:e}]",
-            out(reg) res,
-            in(reg) offset,
-            options(nostack, pure, readonly, preserves_flags)
+            // the `.byte 0xE8` is never actually used, but disassemblers are likely to initially
+            // read `0xE8` as a `rel32` operand and get junk that looks a bit like the following:
+            //
+            // ```
+            //    push    rax
+            //    xor     eax, eax
+            //    jz      short near ptr loc_140003825+1
+            //
+            // loc_140003825:
+            //    call    near ptr 0EE0F811Dh
+            //    enter   148h, 0C8h                  ;; .byte E8h
+            //                                        ;; rdgsbase rax
+            //    mov     rax, [rax]
+            //    mov     [rsp+198h+var_198], rax
+            //
+            //    ;; ...
+            // ```
+            //
+            // i think this is a pretty common obfuscation technique and i dont think this is
+            // super effective against static scanning tools that would just read the bytes...
+            "xor eax,eax",
+            "jz 2f",
+            ".byte 0xE8",
+            "2:",
+            "rdgsbase rax",
+            "add rax,rcx",
+            "mov rax,qword ptr [rax]",
+            in("rcx") offset,
+            out("rax") res,
         );
     }
+
     res
 }
 
-#[inline]
+#[inline(always)]
 pub fn current_thread_id() -> usize {
-    let id: usize;
-    unsafe {
-        core::arch::asm!(
-            "mov {}, gs:[0x48]",
-            out(reg) id,
-            options(nostack, readonly, preserves_flags)
-        );
-    }
-
-    id
+    unsafe { readgsqword(0x48) as _ }
 }
 
 /// Use `BCryptGenRandom` to seed

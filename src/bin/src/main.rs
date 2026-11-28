@@ -11,6 +11,7 @@
 
 extern crate alloc;
 use alloc::vec::Vec;
+use common::widehash;
 use common::winstring::rt_str_to_utf16;
 use core::ffi::c_void;
 use core::hint::black_box;
@@ -18,6 +19,7 @@ use core::ptr::null_mut;
 use hooklib::breakpoint::install_breakpoint;
 use hooklib::hook::{block_execution, clobber_return, continue_execution, set_fn_arg};
 use hooklib::registers::DRX;
+use resolver::module::Module;
 
 use common::alloc::WinHeap;
 use common::winapi::PVECTORED_EXCEPTION_HANDLER;
@@ -89,26 +91,21 @@ fn scary_mb(ctx: &mut CONTEXT) {
 }
 
 fn startup() -> u64 {
-    let target_a: *const c_void = example_function as _;
-    let detour_a: *const c_void = detour_function as _;
+    // let target_a: *const c_void = example_function as _;
+    // let detour_a: *const c_void = detour_function as _;
 
     let handler: PVECTORED_EXCEPTION_HANDLER = VectorHandler as _;
     let _ = unsafe { AddVectoredExceptionHandler(1, handler) };
 
-    let string1 = example_function(10, 20);
-    common::println!("string 1: {}", string1);
+    // let string1 = example_function(10, 20);
+    // common::println!("string 1: {}", string1);
 
-    install_breakpoint(target_a, detour_a, DRX::Dr0);
-    install_breakpoint(MessageBoxW as _, scary_mb as _, DRX::Dr1);
-
-    // force indirect call wrapped in a black box to avoid devirtualisation/CSE in release builds
-    let f: fn(u64, u64) -> u64 = black_box(example_function);
-    let r = f(black_box(10), black_box(20));
-    common::println!("string 2: {}", r);
+    // install_breakpoint(target_a, detour_a, DRX::Dr0);
 
     let text_str_normal = "normal message";
     let caption_str = "normal";
 
+    install_breakpoint(MessageBoxW as _, scary_mb as _, DRX::Dr1);
     unsafe {
         MessageBoxW(
             null_mut(),
@@ -117,6 +114,16 @@ fn startup() -> u64 {
             MB_ICONINFORMATION | MB_OK,
         )
     };
+
+    // force indirect call wrapped in a black box to avoid devirtualisation/CSE in release builds
+    let f: fn(u64, u64) -> u64 = black_box(example_function);
+    let r = f(black_box(10), black_box(20));
+    common::println!("string 2: {}", r);
+
+    let k32_hash = widehash!("KERNEL32.DLL\0");
+    let k32 = Module::new(k32_hash);
+
+    common::println!("number of exported funcs: {}", k32.exp_inf.funcs_len);
 
     0
 }
