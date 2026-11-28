@@ -14,7 +14,7 @@ use core::ptr;
 use core::slice::from_raw_parts;
 
 use common::prelude::*;
-use common::winapi::{CONTEXT, HANDLE, LARGE_INTEGER, PVOID, SIZE_T, ULONG, ULONG_PTR};
+use common::winapi::*;
 use common::winstring::from_ansi_ptr;
 
 use crate::module::Module;
@@ -125,6 +125,60 @@ pub fn _NtSetContextThread(
     ThreadContext: *mut CONTEXT,
 ) -> i32 {
     unsafe { syscall_2(sc, ThreadHandle as _, ThreadContext as _) }
+}
+
+pub fn _NtOpenThread(
+    sc: &NtSyscall,
+    ThreadHandle: PHANDLE,
+    DesiredAccess: ACCESS_MASK,
+    ObjectAttributes: PCOBJECT_ATTRIBUTES,
+    ClientId: *mut CLIENT_ID,
+) -> i32 {
+    unsafe {
+        syscall_4(
+            sc,
+            ThreadHandle as _,
+            DesiredAccess as _,
+            ObjectAttributes as _,
+            ClientId as _,
+        )
+    }
+}
+
+#[unsafe(naked)]
+pub unsafe extern "win64" fn syscall_4(
+    sc: &NtSyscall,
+    arg_1: u64,
+    arg_2: u64,
+    arg_3: u64,
+    arg_4: u64,
+) -> i32 {
+    core::arch::naked_asm!(
+        "mov r10, rdx",
+        "mov rdx, r8",
+        "mov r8, r9",
+        // pull `arg_4` off the top of the stack (i.e. `rsp + shadow_space + 8`)
+        "mov r9, qword ptr [rsp + 0x28]",
+        "mov eax, dword ptr [rcx + {ssn_off}]",
+        "mov r11, qword ptr [rcx + {inst_off}]",
+        "jmp r11",
+        ssn_off = const core::mem::offset_of!(NtSyscall, ssn),
+        inst_off = const core::mem::offset_of!(NtSyscall, inst_address),
+    )
+}
+
+#[unsafe(naked)]
+pub unsafe extern "win64" fn syscall_3(sc: &NtSyscall, arg_1: u64, arg_2: u64, arg_3: u64) -> i32 {
+    core::arch::naked_asm!(
+        "mov r10, rdx",
+        "mov rdx, r8",
+        "mov r8, r9",
+        "mov eax, dword ptr [rcx + {ssn_off}]",
+        "mov r11, qword ptr [rcx + {inst_off}]",
+        "jmp r11",
+        ssn_off = const core::mem::offset_of!(NtSyscall, ssn),
+        inst_off = const core::mem::offset_of!(NtSyscall, inst_address),
+    )
 }
 
 #[unsafe(naked)]

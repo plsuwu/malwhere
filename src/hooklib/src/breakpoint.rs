@@ -8,7 +8,11 @@ use crate::hook::HookTab;
 use crate::registers::{DRCtl, DRX};
 use crate::{get_thread_ctx_sc, set_thread_ctx_sc};
 
-pub fn install_breakpoint(target: *const core::ffi::c_void, detour: *const c_void, reg: DRX) {
+pub fn install_breakpoint(
+    target: *const core::ffi::c_void,
+    detour: *const c_void,
+    reg: DRX,
+) {
     #[cfg(debug_assertions)]
     println!("installing breakpoint: DRX={}", reg as u64);
 

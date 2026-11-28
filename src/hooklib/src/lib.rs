@@ -11,7 +11,6 @@
 use core::cell::Cell;
 use core::cell::LazyCell;
 
-use common::hashing::DEFAULT_KEY;
 use common::prelude::*;
 use common::winapi::*;
 use resolver::syscall::NtSyscall;
@@ -23,10 +22,11 @@ pub mod hook;
 pub mod registers;
 
 /// Lazily-initialized syscalls for `NtGetContextThread`/`NtSetContextThread` addresses
-static mut CONTEXT_SC: LazyCell<[NtSyscall; 2]> = LazyCell::new(|| {
+static mut CONTEXT_SC: LazyCell<[NtSyscall; 3]> = LazyCell::new(|| {
     [
-        NtSyscall::new(widehash!("NtGetContextThread\0", &DEFAULT_KEY)),
-        NtSyscall::new(widehash!("NtSetContextThread\0", &DEFAULT_KEY)),
+        NtSyscall::new(widehash!("NtGetContextThread\0")),
+        NtSyscall::new(widehash!("NtSetContextThread\0")),
+        NtSyscall::new(widehash!("NtOpenThread\0")),
     ]
 });
 

@@ -34,6 +34,8 @@ pub type PDWORD = *mut DWORD;
 pub type LPDWORD = *mut DWORD;
 pub type PHANDLE = *mut HANDLE;
 
+pub type ACCESS_MASK = DWORD;
+
 pub type PPS_POST_PROCESS_INIT_ROUTINE = Option<unsafe extern "system" fn()>;
 
 pub const IMAGE_DOS_SIGNATURE: USHORT = 0x5A4D;
@@ -328,12 +330,35 @@ pub struct API_SET_NAMESPACE {
     pub Size: ULONG,
     pub Flags: ULONG,
     pub Count: ULONG,
+    /// to `API_SET_NAMESPACE_ENTRY[Count]`, from this struct base
     pub EntryOffset: ULONG,
+    /// to `API_SET_HASH_ENTRY[Count]`, from this struct base
     pub HashOffset: ULONG,
     pub HashFactor: ULONG,
 }
 
+#[repr(C)]
+pub struct API_SET_NAMESPACE_ENTRY {
+    /// `API_SET_SCHEMA_ENTRY_FLAGS_*`
+    Flags: ULONG,
+    /// to `WCHAR[NameLength / sizeof(WCHAR)]`, from schema base
+    NameOffset: ULONG,
+    NameLength: ULONG,
+    HashedLength: ULONG,
+    /// to `API_SET_VALUE_ENTRY[ValueCount]`, from schema base
+    ValueOffset: ULONG,
+    ValueCount: ULONG,
+}
+
+#[repr(C)]
+pub struct API_SET_HASH_ENTRY {
+    Hash: ULONG,
+    Index: ULONG,
+}
+
 pub type PAPI_SET_NAMESPACE = *mut API_SET_NAMESPACE;
+pub type PAPI_SET_NAMESPACE_ENTRY = *mut API_SET_NAMESPACE_ENTRY;
+pub type PAPI_SET_HASH_ENTRY = *mut API_SET_HASH_ENTRY;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -553,9 +578,37 @@ pub type PSYSTEMTIME = *mut SYSTEMTIME;
 pub struct NTSTATUS(pub i32);
 
 #[repr(C)]
-pub struct SRWLOCK {
-    pub ptr: *mut core::ffi::c_void,
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CLIENT_ID {
+    pub UniqueProcess: HANDLE,
+    pub UniqueThread: HANDLE,
 }
+
+impl Default for CLIENT_ID {
+    fn default() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct OBJECT_ATTRIBUTES {
+    pub Length: ULONG,
+    pub RootDirectory: HANDLE,
+    pub ObjectName: PUNICODE_STRING,
+    pub Attributes: ULONG,
+    pub SecurityDescriptor: PVOID,
+    pub SecurityQualityOfService: PVOID,
+}
+
+impl Default for OBJECT_ATTRIBUTES {
+    fn default() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
+}
+
+pub type PUNICODE_STRING = *mut UNICODE_STRING;
+pub type PCOBJECT_ATTRIBUTES = *mut OBJECT_ATTRIBUTES;
 
 #[link(name = "kernel32", kind = "raw-dylib")]
 unsafe extern "system" {
