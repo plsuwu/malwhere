@@ -3,6 +3,7 @@ use core::arch::x86_64::{__cpuid, _rdrand64_step};
 use crate::winapi::{LARGE_INTEGER, QueryPerformanceCounter};
 
 pub fn random_seed() -> u64 {
+    // TODO: perhaps no RDRAND is a partial indicator of an analysis environment??
     // something vaguely random-like as a fallback if a CPU does not have `RDRAND`
     rdrand64().unwrap_or_else(query_counter)
 }

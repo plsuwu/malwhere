@@ -140,6 +140,7 @@ pub unsafe fn read_exports_info(
     }
 }
 
+#[inline]
 fn ntdll_base(peb: winapi::PEB) -> *mut winapi::LDR_DATA_TABLE_ENTRY {
     unsafe {
         (*(*peb.Ldr).InMemoryOrderModuleList.Flink)
@@ -149,13 +150,13 @@ fn ntdll_base(peb: winapi::PEB) -> *mut winapi::LDR_DATA_TABLE_ENTRY {
 }
 
 fn enumerate_modules(peb: winapi::PEB, target: u64) -> *mut winapi::LDR_DATA_TABLE_ENTRY {
-    if target == widehash!("ntdll.dll\0", &DEFAULT_KEY) {
+    if target == widehash!("ntdll.dll\0") {
         return ntdll_base(peb);
     }
 
     let mut curr_list_entry: *mut winapi::LIST_ENTRY =
         unsafe { (*peb.Ldr).InMemoryOrderModuleList.Flink };
-    let ldr_head: *mut winapi::LIST_ENTRY = unsafe { (*curr_list_entry).Blink };
+    let list_head: *mut winapi::LIST_ENTRY = unsafe { (*curr_list_entry).Blink };
     let mut curr: *mut winapi::LDR_DATA_TABLE_ENTRY = curr_list_entry as _;
 
     loop {
@@ -164,21 +165,23 @@ fn enumerate_modules(peb: winapi::PEB, target: u64) -> *mut winapi::LDR_DATA_TAB
         let hash = common::rt_widehash!(&name, &DEFAULT_KEY);
 
         #[cfg(debug_assertions)]
-        println!(
-            " -> module: {:24.24} \thash: 0x{:016x?}\taddr: 0x{:016x?}",
-            name,
-            hash,
-            unsafe { (*curr).DllBase }
-        );
-
-        // TODO: i dont think this correctly resolves the actual module because i
-        //       can't remember how to do it properly so we will come back to this
-        //       at a later date...
-        if common::rt_widehash!(&name, &DEFAULT_KEY) == target {
-            return curr;
+        {
+            let base_name_parts = unsafe { (*(curr.byte_sub(0x10))).BaseDllName };
+            let base_name = unsafe { from_wptr(base_name_parts.Buffer, base_name_parts.Length) };
+            println!(
+                " -> module: {:24.24} // {:24.24}: \thash: 0x{:016x?}\taddr: {:016x?}",
+                name,
+                base_name,
+                hash,
+                unsafe { (*(curr.byte_sub(0x10))).DllBase }
+            );
         }
 
-        if curr != unsafe { (*ldr_head).Blink as _ } {
+        if common::rt_widehash!(&name, &DEFAULT_KEY) == target {
+            return unsafe { curr.byte_sub(0x10) };
+        }
+
+        if curr != unsafe { (*list_head).Blink as _ } {
             curr_list_entry = unsafe { (*curr_list_entry).Flink };
             curr = curr_list_entry as _;
         } else {

@@ -4,6 +4,7 @@ use bitflags::bitflags;
 
 pub type BYTE = u8;
 pub type CHAR = i8;
+pub type UCHAR = BYTE;
 pub type WCHAR = u16;
 pub type USHORT = u16;
 pub type WORD = u16;
@@ -243,16 +244,133 @@ pub struct SLIST_HEADER_1 {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct LDR_DATA_TABLE_ENTRY {
-    pub Reserved1: [PVOID; 2],
+    pub InLoadOrderLinks: LIST_ENTRY,
     pub InMemoryOrderLinks: LIST_ENTRY,
-    pub Reserved2: [PVOID; 2],
+    pub InInitializationOrderLinks: LIST_ENTRY,
     pub DllBase: PVOID,
-    pub Reserved3: [PVOID; 2],
+    pub EntryPoint: PVOID,
+    pub SizeOfImage: ULONG,
     pub FullDllName: UNICODE_STRING,
-    pub Reserved4: [BYTE; 8],
-    pub Reserved5: [PVOID; 3],
-    pub Anonymous: LDR_DATA_TABLE_ENTRY_0,
+    pub BaseDllName: UNICODE_STRING,
+    pub Flags: LDR_DATA_TABLE_ENTRY_FLAGS,
+    pub ObsoleteLoadCount: USHORT,
+    pub TlsIndex: USHORT,
+    pub HashLinks: LIST_ENTRY,
     pub TimeDateStamp: ULONG,
+    pub EntryPointActivationContext: PVOID,
+    pub Lock: PVOID,
+    pub DdagNode: PVOID,
+    pub NodeModuleLink: LIST_ENTRY,
+    pub LoadContext: PVOID,
+    pub ParentDllBase: PVOID,
+    pub SwitchBackContext: PVOID,
+    pub BaseAddressIndexNode: RTL_BALANCED_NODE,
+    pub MappingInfoIndexNode: RTL_BALANCED_NODE,
+    pub OriginalBase: PVOID,
+    pub LoadTime: LARGE_INTEGER,
+    pub BaseNameHashValue: ULONG,
+    pub LoadReason: LDR_DLL_LOAD_REASON, // enum
+    pub ImplicitPathOptions: ULONG,
+    pub ReferenceCount: ULONG,
+    pub DependentLoadFlags: ULONG,
+    pub SigningLevel: UCHAR,
+    pub CheckSum: ULONG,
+    pub ActivePatchImageBase: PVOID,
+    pub HotPatchState: LDR_HOT_PATCH_STATE,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub enum LDR_HOT_PATCH_STATE {
+    LdrHotPatchBaseImage,
+    LdrHotPatchNotApplied,
+    LdrHotPatchAppliedReverse,
+    LdrHotPatchAppliedForward,
+    LdrHotPatchFailedToPatch,
+    LdrHotPatchStateMax,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub enum LDR_DLL_LOAD_REASON {
+    LoadReasonUnknown = -1,
+    LoadReasonStaticDependency = 0,
+    LoadReasonStaticForwarderDependency = 1,
+    LoadReasonDynamicForwarderDependency = 2,
+    LoadReasonDelayloadDependency = 3,
+    LoadReasonDynamicLoad = 4,
+    LoadReasonAsImageLoad = 5,
+    LoadReasonAsDataLoad = 6,
+    LoadReasonEnclavePrimary = 7,
+    LoadReasonEnclaveDependency = 8,
+    LoadReasonPatchImage = 9,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RTL_BALANCED_NODE_Children {
+    pub Left: *mut RTL_BALANCED_NODE,
+    pub Right: *mut RTL_BALANCED_NODE,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union RTL_BALANCED_NODE_0 {
+    pub Children: [*mut RTL_BALANCED_NODE; 2],
+    pub Anonymous: RTL_BALANCED_NODE_Children,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union RTL_BALANCED_NODE_1 {
+    pub _bitfield: BYTE,
+    pub ParentValue: ULONG_PTR,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RTL_BALANCED_NODE {
+    pub Anonymous1: RTL_BALANCED_NODE_0,
+    pub Anonymous2: RTL_BALANCED_NODE_1,
+}
+
+bitflags! {
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct LDR_DATA_TABLE_ENTRY_FLAGS: ULONG {
+        const PackagedBinary = 1 << 0;
+        const MarkedForRemoval = 1 << 1;
+        const ImageDll = 1 << 2;
+        const LoadNotificationsSent = 1 << 3;
+        const TelemetryEntryProcessed  = 1 << 4;
+        const ProcessStaticImport = 1 << 5;
+        const InLegacyLists = 1 << 6;
+        const InIndexes = 1 << 7;
+        const ShimDll = 1 << 8;
+        const InExceptionTable = 1 << 9;
+        const VerifierProvider = 1 << 10;
+        const ShimEngineCalloutSent = 1 << 11;
+        const LoadInProgress = 1 << 12;
+        const LoadConfigProcessed = 1 << 13;
+        const EntryProcessed = 1 << 14;
+        const ProtectDelayLoad  = 1 << 15;
+        const AuxIatCopyPrivate = 1 << 16;
+        const ReservedFlags3 = 1 << 17;
+        const DontCallForThreads = 1 << 18;
+        const ProcessAttachCalled = 1 << 19;
+        const ProcessAttachFailed = 1 << 20;
+        const ScpInExceptionTable = 1 << 21;
+        const CorImage = 1 << 22;
+        const DontRelocate = 1 << 23;
+        const CorILOnly  = 1 << 24;
+        const ChpeImage = 1 << 25;
+        const ChpeEmulatorImage = 1 << 26;
+        const ReservedFlags5 = 1 << 27;
+        const Redirected = 1 << 28;
+        const ReservedFlags6_0 = 1 << 29;
+        const ReservedFlags6_1 = 1 << 30;
+        const CompatDatabaseProcessed = 1 << 31;
+    }
 }
 
 /// Constructed from [NtDoc `PEB_LDR_DATA`] documentation.
